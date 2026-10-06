@@ -64,6 +64,14 @@ int main() {
           "embedding exports quotient vertices and normalized chord magnitudes");
 
     auto post=solve_projectively_rigid_post_closure(nc.certificate);
+    if (post.decision!=Decision::Realizable) {
+        std::cerr << "DIAG post decision=" << static_cast<int>(post.decision)
+                  << " proof=" << static_cast<int>(post.proof)
+                  << " termination=" << static_cast<int>(post.termination)
+                  << " witness_a=" << post.certificate.witness_a
+                  << " witness_b=" << post.certificate.witness_b
+                  << " checked_pairs=" << post.certificate.checked_pairs << "\n";
+    }
     check(post.decision==Decision::Realizable,
           "ABCABC witness passes general projectively-rigid post-closure verifier");
     check(post.proof==RigidPostClosureProof::AllPairsClear,
