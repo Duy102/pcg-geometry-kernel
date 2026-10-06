@@ -1,0 +1,11 @@
+# Theorem Provenance
+
+Stable IDs used by the initial vertical slice:
+
+| ID | Source | Role |
+|---|---|---|
+| `PCG-ABCABC-THM-001` | `PCG_ABCABC_Complete_Six_Arc_Realizability_v0.3.tex`, Complete constrained six-arc realizability criterion | top-level ABCABC iff criterion |
+| `PCG-ABCABC-LEM-EXTRAHIT-001` | same source, Exact shared-start interior criterion | local `ExtraHit` membership |
+| `PCG-ABCABC-LEM-CIRCLE2-001` | same source, Second supporting-circle intersection | local second-intersection construction |
+
+Source SHA-256 digests are generated into `docs/source-digests.txt` during Phase 0 and are certificate provenance inputs.
