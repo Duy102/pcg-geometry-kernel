@@ -23,12 +23,18 @@ pcg::NetworkClosureInput triangle(pcg::PiRational q) {
     };
 }
 
+pcg::NetworkClosureInput n_cycle(std::size_t n, pcg::PiRational q) {
+    pcg::NetworkClosureInput in;
+    in.vertex_count=n;
+    for (std::size_t i=0;i<n;++i) {
+        in.trace_vertices.push_back(i);
+        in.turns.emplace_back(q);
+    }
+    return in;
+}
+
 pcg::NetworkClosureInput four_cycle(pcg::PiRational q) {
-    return pcg::NetworkClosureInput{
-        4,
-        {0,1,2,3},
-        {pcg::Turn{q},pcg::Turn{q},pcg::Turn{q},pcg::Turn{q}}
-    };
+    return n_cycle(4,q);
 }
 
 } // namespace
@@ -145,6 +151,38 @@ int main() {
           "higher-dimensional Stiemke dual is stored");
     check(verify_network_closure_certificate(so.certificate).status==NetworkClosureStatus::NotClosed,
           "higher-dimensional Stiemke certificate verifies");
+
+    // General higher-dimensional family:
+    // tau=2*pi/n gives n evenly-spaced chord directions around the full circle,
+    // so c=(1,...,1) is positive. tau=pi/n keeps all chord directions in one
+    // open half-plane, so Stiemke must certify non-closure.
+    for (std::size_t n=4;n<=8;++n) {
+        auto regular=n_cycle(n,PiRational{BigInt{2},BigInt{n}});
+        auto rc=solve_network_closure(regular);
+        check(rc.certificate.exact_rank==2,
+              "regular n-cycle has exact rank two");
+        check(n-rc.certificate.exact_rank==n-2,
+              "regular n-cycle exercises expected higher nullity");
+        check(rc.status==NetworkClosureStatus::Closed &&
+              rc.proof==NetworkClosureProof::CertifiedPositiveKernel,
+              "regular n-cycle has certified positive kernel");
+        check(verify_network_closure_certificate(rc.certificate).status==
+              NetworkClosureStatus::Closed,
+              "regular n-cycle certificate verifies");
+
+        auto halfplane=n_cycle(n,PiRational{BigInt{1},BigInt{n}});
+        auto hp=solve_network_closure(halfplane);
+        check(hp.certificate.exact_rank==2,
+              "half-plane n-cycle has exact rank two");
+        check(n-hp.certificate.exact_rank==n-2,
+              "half-plane n-cycle exercises expected higher nullity");
+        check(hp.status==NetworkClosureStatus::NotClosed &&
+              hp.proof==NetworkClosureProof::CertifiedStiemkeObstruction,
+              "half-plane n-cycle has certified Stiemke obstruction");
+        check(verify_network_closure_certificate(hp.certificate).status==
+              NetworkClosureStatus::NotClosed,
+              "half-plane n-cycle Stiemke certificate verifies");
+    }
 
     // Cyclic source reindexing preserves the geometric closure problem.
     NetworkClosureInput rotated{
