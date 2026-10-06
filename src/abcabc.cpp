@@ -149,6 +149,9 @@ ABCABCResult solve_abcabc(const ABCABCInput& input) {
 
 ABCABCResult verify_abcabc_certificate(const ABCABCCertificate& certificate) {
     if (certificate.schema != "pcg-abcabc-certificate" || certificate.schema_version != "1.0" ||
+        certificate.theorem_id != "PCG-ABCABC-THM-001" ||
+        certificate.source_digest.algorithm != "SHA-256" ||
+        certificate.source_digest.value != "2aa832a00031035d964c0d9362e4409861e19b97a9d764f3123a42edef400beb" ||
         certificate.canonical_input_digest != sha256_hex(canonicalize_abcabc_input(certificate.input))) {
         ABCABCResult r(certificate);
         r.decision=Decision::Indeterminate;

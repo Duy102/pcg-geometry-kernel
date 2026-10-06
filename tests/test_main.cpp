@@ -61,6 +61,19 @@ int main() {
     auto json2 = pcg::serialize_abcabc_certificate(solved.certificate);
     check(json1 == json2, "certificate serialization deterministic");
 
+    auto wrong_theorem = solved.certificate;
+    wrong_theorem.theorem_id = "PCG-ABCABC-THM-TAMPERED";
+    auto wrong_theorem_verified = pcg::verify_abcabc_certificate(wrong_theorem);
+    check(wrong_theorem_verified.decision == pcg::Decision::Indeterminate &&
+          wrong_theorem_verified.termination == pcg::TerminationReason::BackendFailure,
+          "certificate verifier rejects tampered theorem identity");
+
+    auto wrong_source = solved.certificate;
+    wrong_source.source_digest.value = std::string(64, '0');
+    auto wrong_source_verified = pcg::verify_abcabc_certificate(wrong_source);
+    check(wrong_source_verified.decision == pcg::Decision::Indeterminate &&
+          wrong_source_verified.termination == pcg::TerminationReason::BackendFailure,
+          "certificate verifier rejects tampered theorem source digest");
 
     // Symmetric all-2pi/3 input is numerically/geometrically degenerate for the
     // current certified cross-passage path and must not be overclaimed.
