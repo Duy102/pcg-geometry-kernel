@@ -45,6 +45,19 @@ struct SharedStartIntersection {
     CertifiedScalar qy;
 };
 
+struct CertifiedPoint2 {
+    CertifiedScalar x;
+    CertifiedScalar y;
+};
+
+struct CertifiedFiniteArc {
+    CertifiedPoint2 source;
+    CertifiedPoint2 target;
+    PiRational tangent_phase_pi;
+    Turn turn;
+    PositiveInterval chord;
+};
+
 SupportRelation shared_start_support_relation(const SharedStartArc& a, const SharedStartArc& b);
 SharedStartIntersection shared_start_second_intersection(const SharedStartArc& a, const SharedStartArc& b);
 CertifiedTruth shared_start_arc_contains_second(const SharedStartArc& arc,
@@ -52,5 +65,10 @@ CertifiedTruth shared_start_arc_contains_second(const SharedStartArc& arc,
                                                 const CertifiedScalar& qx,
                                                 const CertifiedScalar& qy);
 CertifiedTruth pcg_extra_hit(const SharedStartArc& a, const SharedStartArc& b);
+
+// General finite-arc Hit predicate for pairs with no prescribed common endpoint.
+// Tangency/coincident-support boundary cases are returned conservatively as
+// Indeterminate rather than guessed.
+CertifiedTruth pcg_hit(const CertifiedFiniteArc& a, const CertifiedFiniteArc& b);
 
 } // namespace pcg

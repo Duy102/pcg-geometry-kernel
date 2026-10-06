@@ -76,11 +76,43 @@ struct NetworkClosureResult {
     NetworkClosureCertificate certificate;
 };
 
+struct AlgebraicPoint2 {
+    AlgebraicChordValue x;
+    AlgebraicChordValue y;
+};
+
+enum class ProjectivelyRigidEmbeddingStatus {
+    Ready,
+    NotClosed,
+    NotProjectivelyRigid,
+    Indeterminate,
+    InvalidCertificate
+};
+
+struct ProjectivelyRigidEmbedding {
+    unsigned cyclotomic_order{};
+    std::vector<AlgebraicPoint2> vertices;
+    std::vector<AlgebraicChordValue> chord_magnitudes;
+    std::vector<PiRational> tangent_phase_pi;
+};
+
+struct ProjectivelyRigidEmbeddingResult {
+    ProjectivelyRigidEmbeddingStatus status{ProjectivelyRigidEmbeddingStatus::Indeterminate};
+    ProjectivelyRigidEmbedding embedding;
+};
+
 NetworkCycleBasis build_network_cycle_basis(const NetworkClosureInput& input);
 std::string canonicalize_network_closure_input(const NetworkClosureInput& input);
 std::string serialize_network_closure_certificate(const NetworkClosureCertificate& certificate);
 
 NetworkClosureResult solve_network_closure(const NetworkClosureInput& input);
 NetworkClosureResult verify_network_closure_certificate(const NetworkClosureCertificate& certificate);
+
+ProjectivelyRigidEmbeddingResult reconstruct_projectively_rigid_embedding(
+    const NetworkClosureCertificate& certificate);
+
+CertifiedScalar certified_algebraic_real(
+    unsigned cyclotomic_order,
+    const AlgebraicChordValue& value);
 
 } // namespace pcg
