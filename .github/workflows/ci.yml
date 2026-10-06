@@ -1,27 +1,83 @@
 name: CI
+
 on:
   push:
   pull_request:
+
+permissions:
+  contents: read
+
+env:
+  BOOST_DEV_VERSION: 1.83.0-2.1ubuntu3.2
+
 jobs:
   linux:
-    runs-on: ubuntu-latest
+    name: linux-${{ matrix.compiler }}-${{ matrix.build_type }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        compiler: [gcc, clang]
+        include:
+          - compiler: gcc
+            cxx: g++-13
+            build_type: Debug
+          - compiler: gcc
+            cxx: g++-13
+            build_type: Release
+          - compiler: clang
+            cxx: clang++-18
+            build_type: Debug
+          - compiler: clang
+            cxx: clang++-18
+            build_type: Release
     steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
+      - name: Checkout pinned action
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install pinned Boost headers
         run: |
           sudo apt-get update
-          sudo apt-get install -y libboost-dev
-      - name: Configure GCC
-        if: matrix.compiler == 'gcc'
-        run: cmake -S . -B build -DCMAKE_CXX_COMPILER=g++
-      - name: Configure Clang
-        if: matrix.compiler == 'clang'
-        run: cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++
+          sudo apt-get install -y "libboost1.83-dev=${BOOST_DEV_VERSION}"
+      - name: Toolchain manifest
+        run: |
+          echo "runner=ubuntu-24.04"
+          "${{ matrix.cxx }}" --version | head -n 1
+          cmake --version | head -n 1
+          dpkg-query -W -f='boost=${Version}\n' libboost1.83-dev
+          openssl version
+          ldd --version | head -n 1
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
       - name: Build
         run: cmake --build build -j2
       - name: Test
         run: ctest --test-dir build --output-on-failure
+
+  sanitizers:
+    name: linux-gcc-asan-ubsan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout pinned action
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install pinned Boost headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y "libboost1.83-dev=${BOOST_DEV_VERSION}"
+      - name: Configure ASan and UBSan
+        run: >
+          cmake -S . -B build-sanitize
+          -DCMAKE_CXX_COMPILER=g++-13
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+      - name: Build
+        run: cmake --build build-sanitize -j2
+      - name: Test under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ctest --test-dir build-sanitize --output-on-failure
