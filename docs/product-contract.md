@@ -40,3 +40,14 @@ For a finite Seifert multigraph with fixed circle orientations and valid positiv
 - INDETERMINATE only for backend or certificate-integrity failure.
 
 The module must never map relaxed flow feasibility directly to top-level REALIZABLE. Individual arc-turn allocation, metric closure, prescribed crossing geometry, and unintended-intersection exclusion remain later layers.
+
+## Network Closure Phase 5A
+
+The Network Closure module is an intermediate metric-closure layer. It consumes a cyclic quotient trace and exact rational-pi turns and tests the source theorem condition `ker(N) intersect R^m_{>0}` for the currently supported exact algebraic cases.
+
+Phase 5A is complete for:
+
+- exact full-column-rank obstruction;
+- projectively rigid networks (`dim ker N = 1`) when algebraic signs are certifiably separated.
+
+It returns `INDETERMINATE` for higher-dimensional kernels, cyclotomic order above the software cap, or unresolved sign separation. In particular, metric `CLOSED` must never be promoted directly to top-level `REALIZABLE`; finite-arc collision/intersection checks remain separate.

@@ -4,7 +4,7 @@ Theorem-traceable production engineering for Prime-Curve Geometry (PCG).
 
 ## Current status
 
-The repository currently contains a **hardened certified ABCABC production-candidate vertical slice** merged into `main`.
+The repository currently contains a **hardened certified ABCABC vertical slice**, an exact **Seifert turn-flow** layer, and a **Phase 5A projectively-rigid Network Closure** module.
 
 It is intentionally narrow: this is **not** a claim that arbitrary-trace PCG or the full PCG framework is production-complete.
 
@@ -68,6 +68,16 @@ The module is intentionally intermediate: Seifert-flow feasibility does not impl
 
 Its validation includes a deterministic 6000-case cross-check against a separate exhaustive exact-cut oracle.
 
+## Phase 5A Network Closure
+
+For rational-pi turns, the kernel now builds the Network Closure matrix with exact cyclotomic algebra rather than ordinary floating-point sine/cosine values.
+
+Phase 5A exactly determines matrix rank and kernel dimension. Full-column-rank non-closure is exact. When the network is projectively rigid (`dim ker N = 1`), it reconstructs an exact algebraic kernel vector and certifies whether its components can all be made strictly positive.
+
+The production ABCABC rational witness passes this Network Closure layer with cycle-space dimension beta = 4 and a one-dimensional positive kernel.
+
+The current deliberate limits are cyclotomic order `<= 256` and projectively rigid/full-rank decision paths. Higher-dimensional positive-kernel feasibility is reserved for Phase 5B and currently returns `INDETERMINATE`.
+
 ## CI / Trusted Computing Base gates
 
 The current CI baseline uses:
@@ -94,7 +104,7 @@ This improves reproducibility but is not a fully hermetic build: the GitHub Ubun
 The current repository does not yet provide:
 
 - a general arbitrary-Gauss-word solver;
-- the general Network Closure metric layer;
+- general higher-dimensional Network Closure positivity / Stiemke-dual solving;
 - production `ABCADCBD`;
 - general remote-Hit / global BVH or spatial-index infrastructure;
 - language bindings;
