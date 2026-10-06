@@ -57,6 +57,9 @@ int main() {
         pcg::Turn{PiRational{1,3}}, pcg::Turn{PiRational{1,1}}, pcg::Turn{PiRational{1,3}},
         pcg::Turn{PiRational{1,1}}, pcg::Turn{PiRational{1,3}}, pcg::Turn{PiRational{1,1}}
     }};
+    auto good_domain = pcg::certify_abcabc_genericity(good);
+    check(good_domain == pcg::ABCABCGenericityStatus::Satisfied,
+          "ABCABC r=2 theorem witness satisfies genericity domain gate");
     auto solved = pcg::solve_abcabc(good);
     check(solved.decision == pcg::Decision::Realizable, "ABCABC r=2 theorem witness is realizable");
     check(solved.assurance == pcg::ArithmeticAssurance::CertifiedNumerical || solved.assurance == pcg::ArithmeticAssurance::Exact,
@@ -91,8 +94,12 @@ int main() {
         pcg::Turn{PiRational{2,3}}, pcg::Turn{PiRational{2,3}}, pcg::Turn{PiRational{2,3}},
         pcg::Turn{PiRational{2,3}}, pcg::Turn{PiRational{2,3}}, pcg::Turn{PiRational{2,3}}
     }};
+    auto sym_domain = pcg::certify_abcabc_genericity(symmetric);
+    check(sym_domain != pcg::ABCABCGenericityStatus::Satisfied,
+          "degenerate symmetric ABCABC fails genericity gate");
     auto sym = pcg::solve_abcabc(symmetric);
-    check(sym.decision == pcg::Decision::Indeterminate, "degenerate symmetric ABCABC is not overclaimed");
+    check(sym.decision == pcg::Decision::Unsupported || sym.decision == pcg::Decision::Indeterminate,
+          "degenerate symmetric ABCABC is not overclaimed");
 
     // Exact phase obstruction.
     pcg::ABCABCInput bad_phase = good;

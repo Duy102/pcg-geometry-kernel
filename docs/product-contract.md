@@ -20,3 +20,7 @@ The initial certified input encoding represents each turn as an exact rational m
 - otherwise a valid supported instance is `INDETERMINATE`.
 
 Intermediate modules never emit top-level realizability decisions.
+
+## ABCABC theorem-domain gate
+
+After phase and positive-chord feasibility, the specialized solver explicitly certifies the v0.3 genericity assumptions before any top-level REALIZABLE claim. The gate checks required support-circle distinctness across the fifteen arc pairs, cross-passage transversality at prescribed double points, and separation from the antipodal principal-argument branch cut. Certified violations return UNSUPPORTED; unresolved interval separation returns INDETERMINATE.

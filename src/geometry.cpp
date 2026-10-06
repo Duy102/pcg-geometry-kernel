@@ -33,8 +33,13 @@ std::optional<I> atan2_i(const I& y, const I& x) {
         return boost::numeric::atan(y / x);
     }
     if (x.upper() < 0.0) {
-        if (y.lower() >= 0.0) return boost::numeric::atan(y / x) + pi;
-        if (y.upper() <= 0.0) return boost::numeric::atan(y / x) - pi;
+        // The negative x-axis is the principal-argument branch cut.
+        // If y contains zero, including the exact antipodal case, do not
+        // silently choose +pi or -pi: theorem-facing callers must return
+        // INDETERMINATE unless a separate domain certificate resolves it.
+        if (y.lower() <= 0.0 && y.upper() >= 0.0) return std::nullopt;
+        if (y.lower() > 0.0) return boost::numeric::atan(y / x) + pi;
+        if (y.upper() < 0.0) return boost::numeric::atan(y / x) - pi;
         return std::nullopt;
     }
     return std::nullopt;
@@ -121,6 +126,34 @@ CertifiedTruth pcg_extra_hit(const SharedStartArc& a, const SharedStartArc& b) {
     if (ina == CertifiedTruth::False || inb == CertifiedTruth::False) return CertifiedTruth::False;
     if (ina == CertifiedTruth::True && inb == CertifiedTruth::True) return CertifiedTruth::True;
     return CertifiedTruth::Indeterminate;
+}
+
+SupportRelation shared_start_support_relation(const SharedStartArc& a, const SharedStartArc& b) {
+    try {
+        const PiRational delta = b.tangent_phase_pi - a.tangent_phase_pi;
+
+        // Exact fast path for the common same-parameter coincidence that
+        // interval dependency would otherwise widen around zero.
+        const auto& ac = a.chord.scalar();
+        const auto& bc = b.chord.scalar();
+        if (is_even_integer(delta) &&
+            a.turn.pi == b.turn.pi &&
+            ac.lower() == bc.lower() &&
+            ac.upper() == bc.upper()) {
+            return SupportRelation::Coincident;
+        }
+
+        const auto ca = center_for_normalized_arc(a, PiRational{0,1});
+        const auto cb = center_for_normalized_arc(b, delta);
+        const I wx = cb.cx - ca.cx;
+        const I wy = cb.cy - ca.cy;
+        const I norm2 = wx*wx + wy*wy;
+        if (norm2.upper() <= 0.0) return SupportRelation::Coincident;
+        if (norm2.lower() > 0.0) return SupportRelation::Distinct;
+        return SupportRelation::Indeterminate;
+    } catch (...) {
+        return SupportRelation::BackendFailure;
+    }
 }
 
 } // namespace pcg

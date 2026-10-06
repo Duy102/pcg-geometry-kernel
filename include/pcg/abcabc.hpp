@@ -17,12 +17,22 @@ using ABCABCSignPattern = std::array<int, 6>;
 // are classified NOT_REALIZABLE by the Seifert rotation filter.
 Decision classify_abcabc_sign_rotation(const ABCABCSignPattern& signs, int rotation);
 
+enum class ABCABCGenericityStatus {
+    Satisfied,
+    Violated,
+    Indeterminate,
+    NotApplicable
+};
+
+ABCABCGenericityStatus certify_abcabc_genericity(const ABCABCInput& input);
+
 enum class ABCABCProofReason {
     AllConditionsSatisfied,
     PhaseCongruenceObstruction,
     PositiveClosureObstruction,
     ExtraHitObstruction,
-    NumericalIndeterminacy
+    NumericalIndeterminacy,
+    TheoremDomainViolation
 };
 
 struct ABCABCCertificate {

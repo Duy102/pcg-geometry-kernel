@@ -95,6 +95,113 @@ SharedStartArc reverse_arc(std::size_t i,
     return SharedStartArc{p[i]+in.turns[i].pi+PiRational{1,1}, Turn{-in.turns[i].pi}, chords[i]};
 }
 
+using ArcPair = std::pair<SharedStartArc,SharedStartArc>;
+
+std::array<ArcPair,3> paired_endpoint_pairs(const std::array<PiRational,6>& p,
+                                            const ABCABCInput& in,
+                                            const std::array<PositiveInterval,6>& c) {
+    return {{
+        {forward_arc(0,p,in,c), forward_arc(3,p,in,c)},
+        {forward_arc(1,p,in,c), forward_arc(4,p,in,c)},
+        {forward_arc(2,p,in,c), forward_arc(5,p,in,c)}
+    }};
+}
+
+std::array<ArcPair,6> source_adjacent_pairs(const std::array<PiRational,6>& p,
+                                            const ABCABCInput& in,
+                                            const std::array<PositiveInterval,6>& c) {
+    return {{
+        {reverse_arc(0,p,in,c), forward_arc(1,p,in,c)},
+        {reverse_arc(1,p,in,c), forward_arc(2,p,in,c)},
+        {reverse_arc(2,p,in,c), forward_arc(3,p,in,c)},
+        {reverse_arc(3,p,in,c), forward_arc(4,p,in,c)},
+        {reverse_arc(4,p,in,c), forward_arc(5,p,in,c)},
+        {reverse_arc(5,p,in,c), forward_arc(0,p,in,c)}
+    }};
+}
+
+std::array<ArcPair,6> cross_passage_pairs(const std::array<PiRational,6>& p,
+                                          const ABCABCInput& in,
+                                          const std::array<PositiveInterval,6>& c) {
+    return {{
+        {forward_arc(0,p,in,c), reverse_arc(2,p,in,c)},
+        {forward_arc(3,p,in,c), reverse_arc(5,p,in,c)},
+        {forward_arc(1,p,in,c), reverse_arc(3,p,in,c)},
+        {forward_arc(4,p,in,c), reverse_arc(0,p,in,c)},
+        {forward_arc(2,p,in,c), reverse_arc(4,p,in,c)},
+        {forward_arc(5,p,in,c), reverse_arc(1,p,in,c)}
+    }};
+}
+
+CertifiedTruth non_antipodal_second_for_arc(const SharedStartArc& arc,
+                                             PiRational relative_phase,
+                                             const SharedStartIntersection& inter) {
+    const auto s = certified_sin_pi(relative_phase).interval();
+    const auto c = certified_cos_pi(relative_phase).interval();
+    const auto& qx = inter.qx.interval();
+    const auto& qy = inter.qy.interval();
+    const auto xr = qx*c + qy*s;
+    const auto yr = -qx*s + qy*c;
+
+    // Antipodal means the second intersection is exactly on the negative
+    // initial-tangent ray. Prove non-antipodal by separating either x or y.
+    if (xr.lower() >= 0.0) return CertifiedTruth::True;
+    if (yr.lower() > 0.0 || yr.upper() < 0.0) return CertifiedTruth::True;
+    if (xr.upper() < 0.0 && yr.lower() == 0.0 && yr.upper() == 0.0)
+        return CertifiedTruth::False;
+    return CertifiedTruth::Indeterminate;
+}
+
+ABCABCGenericityStatus genericity_from_precomputed(const std::array<PiRational,6>& p,
+                                                    const ABCABCInput& in,
+                                                    const std::array<PositiveInterval,6>& c) {
+    const auto paired = paired_endpoint_pairs(p,in,c);
+    const auto adjacent = source_adjacent_pairs(p,in,c);
+    const auto cross = cross_passage_pairs(p,in,c);
+
+    bool unresolved=false;
+    auto inspect_support = [&](const auto& pairs) {
+        for (const auto& [x,y] : pairs) {
+            const auto relation = shared_start_support_relation(x,y);
+            if (relation == SupportRelation::Coincident)
+                return ABCABCGenericityStatus::Violated;
+            if (relation == SupportRelation::Indeterminate ||
+                relation == SupportRelation::BackendFailure)
+                unresolved=true;
+        }
+        return ABCABCGenericityStatus::Satisfied;
+    };
+
+    if (inspect_support(paired) == ABCABCGenericityStatus::Violated ||
+        inspect_support(adjacent) == ABCABCGenericityStatus::Violated ||
+        inspect_support(cross) == ABCABCGenericityStatus::Violated)
+        return ABCABCGenericityStatus::Violated;
+
+    // Cross-passage arcs meet at prescribed double points, so their common
+    // start must be transverse (not tangent), and the second intersection
+    // must avoid the principal-argument antipodal branch cut.
+    for (const auto& [x,y] : cross) {
+        const auto inter = shared_start_second_intersection(x,y);
+        if (inter.status == GeometricStatus::TangentAtStart ||
+            inter.status == GeometricStatus::CoincidentSupport)
+            return ABCABCGenericityStatus::Violated;
+        if (inter.status != GeometricStatus::RegularSecondIntersection) {
+            unresolved=true;
+            continue;
+        }
+        const PiRational delta = y.tangent_phase_pi - x.tangent_phase_pi;
+        const auto na = non_antipodal_second_for_arc(x,PiRational{0,1},inter);
+        const auto nb = non_antipodal_second_for_arc(y,delta,inter);
+        if (na == CertifiedTruth::False || nb == CertifiedTruth::False)
+            return ABCABCGenericityStatus::Violated;
+        if (na == CertifiedTruth::Indeterminate || nb == CertifiedTruth::Indeterminate)
+            unresolved=true;
+    }
+
+    return unresolved ? ABCABCGenericityStatus::Indeterminate
+                      : ABCABCGenericityStatus::Satisfied;
+}
+
 struct Evaluation {
     Decision decision;
     ProofKind kind;
@@ -118,14 +225,15 @@ Evaluation evaluate(const ABCABCInput& in) {
         chord_from_sine(a[1]-a[0])
     };
 
-    const std::array<std::pair<SharedStartArc,SharedStartArc>,6> pairs{{
-        {forward_arc(0,p,in,c), reverse_arc(2,p,in,c)},
-        {forward_arc(3,p,in,c), reverse_arc(5,p,in,c)},
-        {forward_arc(1,p,in,c), reverse_arc(3,p,in,c)},
-        {forward_arc(4,p,in,c), reverse_arc(0,p,in,c)},
-        {forward_arc(2,p,in,c), reverse_arc(4,p,in,c)},
-        {forward_arc(5,p,in,c), reverse_arc(1,p,in,c)}
-    }};
+    const auto genericity = genericity_from_precomputed(p,in,c);
+    if (genericity == ABCABCGenericityStatus::Violated)
+        return {Decision::Unsupported, ProofKind::FinitePredicateCertificate,
+                ArithmeticAssurance::CertifiedNumerical, ABCABCProofReason::TheoremDomainViolation};
+    if (genericity == ABCABCGenericityStatus::Indeterminate)
+        return {Decision::Indeterminate, ProofKind::None,
+                ArithmeticAssurance::None, ABCABCProofReason::NumericalIndeterminacy};
+
+    const auto pairs = cross_passage_pairs(p,in,c);
 
     bool indeterminate=false;
     for (const auto& [x,y] : pairs) {
@@ -149,6 +257,27 @@ ABCABCResult result_from_eval(const ABCABCInput& in, const Evaluation& e) {
         e.decision==Decision::Indeterminate ? TerminationReason::PrecisionLimit : TerminationReason::Completed,
         cert};
 }
+}
+
+ABCABCGenericityStatus certify_abcabc_genericity(const ABCABCInput& input) {
+    try {
+        const auto q=qturns(input);
+        if (!phase_ok(q)) return ABCABCGenericityStatus::NotApplicable;
+        const auto p=phases(q);
+        const auto a=alphas(q,p);
+        if (!positive_closure_ok(a)) return ABCABCGenericityStatus::NotApplicable;
+        std::array<PositiveInterval,6> c{
+            chord_from_sine(a[2]-a[1]),
+            chord_from_sine(a[0]-a[2]),
+            chord_from_sine(a[1]-a[0]),
+            chord_from_sine(a[2]-a[1]),
+            chord_from_sine(a[0]-a[2]),
+            chord_from_sine(a[1]-a[0])
+        };
+        return genericity_from_precomputed(p,input,c);
+    } catch (...) {
+        return ABCABCGenericityStatus::Indeterminate;
+    }
 }
 
 Decision classify_abcabc_sign_rotation(const ABCABCSignPattern& signs, int rotation) {
