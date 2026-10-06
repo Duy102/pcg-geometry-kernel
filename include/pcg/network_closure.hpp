@@ -32,7 +32,10 @@ enum class NetworkClosureProof {
     CyclotomicOrderLimit,
     SignCertificationLimit,
     BackendFailure,
-    None
+    None,
+    CertifiedGeneralPositiveKernel,
+    CertifiedGeneralConeObstruction,
+    EliminationComplexityLimit
 };
 
 struct AlgebraicChordValue {

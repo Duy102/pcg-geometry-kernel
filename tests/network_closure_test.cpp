@@ -115,6 +115,50 @@ int main() {
     check(solve_network_closure(rotated).status==NetworkClosureStatus::Closed,
           "cyclic source reindexing preserves network closure");
 
+
+    // General positive-kernel cases: these have nullity 2, so the old
+    // projectively-rigid-only implementation returned INDETERMINATE.
+    NetworkClosureInput square_cycle{
+        4,{0,1,2,3},
+        {
+            Turn{PiRational{1,2}},Turn{PiRational{1,2}},
+            Turn{PiRational{1,2}},Turn{PiRational{1,2}}
+        }
+    };
+    auto sq=solve_network_closure(square_cycle);
+    check(sq.status==NetworkClosureStatus::Closed,
+          "four-cycle with quarter-turns has a general positive kernel");
+    check(sq.proof==NetworkClosureProof::CertifiedGeneralPositiveKernel,
+          "higher-dimensional closed case has general positive-kernel proof");
+    check(sq.certificate.exact_rank==2,
+          "square direction network has rank 2 and kernel dimension 2");
+    check(verify_network_closure_certificate(sq.certificate).status==NetworkClosureStatus::Closed,
+          "general positive-kernel certificate verifies");
+
+    NetworkClosureInput upper_semicircle_cycle{
+        4,{0,1,2,3},
+        {
+            Turn{PiRational{1,4}},Turn{PiRational{1,4}},
+            Turn{PiRational{1,4}},Turn{PiRational{1,4}}
+        }
+    };
+    auto us=solve_network_closure(upper_semicircle_cycle);
+    check(us.status==NetworkClosureStatus::NotClosed,
+          "four-cycle directions in one open half-plane have no positive closure");
+    check(us.proof==NetworkClosureProof::CertifiedGeneralConeObstruction,
+          "higher-dimensional nonclosure has cone-obstruction proof");
+    check(us.certificate.exact_rank==2,
+          "upper-semicircle four-cycle also has kernel dimension 2");
+    check(verify_network_closure_certificate(us.certificate).status==NetworkClosureStatus::NotClosed,
+          "general cone-obstruction certificate verifies");
+
+    auto square_tampered=sq.certificate;
+    square_tampered.rigid_kernel[0].coefficients[0]+=Rational(BigInt{1});
+    auto square_bad=verify_network_closure_certificate(square_tampered);
+    check(square_bad.status==NetworkClosureStatus::Indeterminate &&
+          square_bad.termination==TerminationReason::BackendFailure,
+          "general positive-kernel verifier rejects tampered witness");
+
     // Software-domain cap: theorem remains general, but very high root-of-unity
     // degree is intentionally returned as INDETERMINATE rather than approximated.
     NetworkClosureInput high_order{

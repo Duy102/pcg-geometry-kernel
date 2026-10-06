@@ -581,6 +581,233 @@ SignSummary summarize_signs(const CyclotomicField& field,const std::vector<Alg>&
     return s;
 }
 
+
+std::vector<std::vector<Alg>> kernel_basis_from_rref(const CyclotomicField& field,
+                                                     const RrefResult& rr,
+                                                     std::size_t cols) {
+    std::vector<bool> pivot(cols,false);
+    for (auto c : rr.pivot_cols) pivot[c]=true;
+
+    std::vector<std::size_t> free_cols;
+    for (std::size_t c=0;c<cols;++c)
+        if (!pivot[c]) free_cols.push_back(c);
+
+    std::vector<std::vector<Alg>> basis;
+    basis.reserve(free_cols.size());
+    for (const std::size_t free_col : free_cols) {
+        std::vector<Alg> x(cols,field.zero());
+        x[free_col]=field.one();
+        for (std::size_t r=0;r<rr.pivot_cols.size();++r) {
+            const std::size_t pc=rr.pivot_cols[r];
+            x[pc]=field.neg(rr.r[r][free_col]);
+        }
+        basis.push_back(std::move(x));
+    }
+    return basis;
+}
+
+struct LinearInequality {
+    std::vector<Alg> coeff;
+    Alg rhs;
+};
+
+enum class ConeState {
+    Feasible,
+    Infeasible,
+    Indeterminate,
+    ComplexityLimit
+};
+
+struct ConeResult {
+    ConeState state{ConeState::Indeterminate};
+    std::vector<Alg> parameters;
+};
+
+constexpr std::size_t kMaxEliminationInequalities = 8192;
+
+SignCert compare_real(const CyclotomicField& field,const Alg& a,const Alg& b) {
+    return certified_real_sign(field,field.sub(a,b));
+}
+
+Alg eval_linear(const CyclotomicField& field,
+                const std::vector<Alg>& coeff,
+                const std::vector<Alg>& x) {
+    Alg sum=field.zero();
+    for (std::size_t i=0;i<coeff.size();++i)
+        sum=field.add(sum,field.mul(coeff[i],x[i]));
+    return sum;
+}
+
+ConeResult solve_linear_inequalities(const CyclotomicField& field,
+                                     const std::vector<LinearInequality>& ineq,
+                                     std::size_t vars) {
+    if (vars==0) {
+        for (const auto& q : ineq) {
+            if (!q.coeff.empty()) return {ConeState::Indeterminate,{}};
+            const auto sign=certified_real_sign(field,q.rhs);
+            if (sign==SignCert::Positive) return {ConeState::Infeasible,{}};
+            if (sign==SignCert::Indeterminate) return {ConeState::Indeterminate,{}};
+        }
+        return {ConeState::Feasible,{}};
+    }
+
+    const std::size_t xcol=vars-1;
+    std::vector<const LinearInequality*> pos,neg,zero;
+    pos.reserve(ineq.size());
+    neg.reserve(ineq.size());
+    zero.reserve(ineq.size());
+
+    for (const auto& q : ineq) {
+        if (q.coeff.size()!=vars) return {ConeState::Indeterminate,{}};
+        const auto s=certified_real_sign(field,q.coeff[xcol]);
+        if (s==SignCert::Positive) pos.push_back(&q);
+        else if (s==SignCert::Negative) neg.push_back(&q);
+        else if (s==SignCert::Zero) zero.push_back(&q);
+        else return {ConeState::Indeterminate,{}};
+    }
+
+    if (zero.size() > kMaxEliminationInequalities)
+        return {ConeState::ComplexityLimit,{}};
+    if (!pos.empty() && !neg.empty() &&
+        pos.size() > kMaxEliminationInequalities / neg.size())
+        return {ConeState::ComplexityLimit,{}};
+
+    std::vector<LinearInequality> reduced;
+    reduced.reserve(zero.size()+pos.size()*neg.size());
+
+    for (const auto* q : zero) {
+        LinearInequality r;
+        r.coeff.assign(q->coeff.begin(),q->coeff.begin()+static_cast<std::ptrdiff_t>(xcol));
+        r.rhs=q->rhs;
+        reduced.push_back(std::move(r));
+    }
+
+    for (const auto* p : pos) {
+        const Alg minus_n_dummy=field.zero();
+        (void)minus_n_dummy;
+        for (const auto* n : neg) {
+            const Alg mp=field.neg(n->coeff[xcol]); // -negative coefficient > 0
+            const Alg pp=p->coeff[xcol];            // positive coefficient
+            LinearInequality r;
+            r.coeff.resize(xcol,field.zero());
+            for (std::size_t j=0;j<xcol;++j) {
+                r.coeff[j]=field.add(
+                    field.mul(mp,p->coeff[j]),
+                    field.mul(pp,n->coeff[j]));
+            }
+            r.rhs=field.add(field.mul(mp,p->rhs),field.mul(pp,n->rhs));
+            reduced.push_back(std::move(r));
+            if (reduced.size()>kMaxEliminationInequalities)
+                return {ConeState::ComplexityLimit,{}};
+        }
+    }
+
+    auto sub=solve_linear_inequalities(field,reduced,vars-1);
+    if (sub.state!=ConeState::Feasible) return sub;
+
+    bool have_lower=false,have_upper=false;
+    Alg lower=field.zero(),upper=field.zero();
+
+    for (const auto& q : ineq) {
+        const auto ax_sign=certified_real_sign(field,q.coeff[xcol]);
+        if (ax_sign==SignCert::Zero) {
+            std::vector<Alg> prefix(q.coeff.begin(),q.coeff.begin()+static_cast<std::ptrdiff_t>(xcol));
+            const Alg lhs=eval_linear(field,prefix,sub.parameters);
+            const auto ok=compare_real(field,lhs,q.rhs);
+            if (ok==SignCert::Negative) return {ConeState::Infeasible,{}};
+            if (ok==SignCert::Indeterminate) return {ConeState::Indeterminate,{}};
+            continue;
+        }
+        if (ax_sign==SignCert::Indeterminate)
+            return {ConeState::Indeterminate,{}};
+
+        std::vector<Alg> prefix(q.coeff.begin(),q.coeff.begin()+static_cast<std::ptrdiff_t>(xcol));
+        const Alg rest=eval_linear(field,prefix,sub.parameters);
+        const Alg bound=field.divide(field.sub(q.rhs,rest),q.coeff[xcol]);
+
+        if (ax_sign==SignCert::Positive) {
+            if (!have_lower) {
+                lower=bound;
+                have_lower=true;
+            } else {
+                const auto cmp=compare_real(field,bound,lower);
+                if (cmp==SignCert::Positive) lower=bound;
+                else if (cmp==SignCert::Indeterminate) return {ConeState::Indeterminate,{}};
+            }
+        } else {
+            if (!have_upper) {
+                upper=bound;
+                have_upper=true;
+            } else {
+                const auto cmp=compare_real(field,bound,upper);
+                if (cmp==SignCert::Negative) upper=bound;
+                else if (cmp==SignCert::Indeterminate) return {ConeState::Indeterminate,{}};
+            }
+        }
+    }
+
+    Alg x=field.zero();
+    if (have_lower && have_upper) {
+        const auto gap=compare_real(field,upper,lower);
+        if (gap==SignCert::Negative) return {ConeState::Infeasible,{}};
+        if (gap==SignCert::Indeterminate) return {ConeState::Indeterminate,{}};
+        x=field.scale(field.add(lower,upper),Rational(BigInt{1},BigInt{2}));
+    } else if (have_lower) {
+        x=lower;
+    } else if (have_upper) {
+        x=upper;
+    }
+
+    std::vector<Alg> witness=sub.parameters;
+    witness.push_back(x);
+
+    for (const auto& q : ineq) {
+        const Alg lhs=eval_linear(field,q.coeff,witness);
+        const auto ok=compare_real(field,lhs,q.rhs);
+        if (ok==SignCert::Negative) return {ConeState::Infeasible,{}};
+        if (ok==SignCert::Indeterminate) return {ConeState::Indeterminate,{}};
+    }
+    return {ConeState::Feasible,std::move(witness)};
+}
+
+ConeResult solve_general_positive_kernel(const CyclotomicField& field,
+                                         const RrefResult& rr,
+                                         const std::vector<std::vector<Alg>>& matrix,
+                                         std::size_t cols,
+                                         std::vector<Alg>* positive_kernel) {
+    const auto basis=kernel_basis_from_rref(field,rr,cols);
+    if (basis.empty()) return {ConeState::Infeasible,{}};
+
+    std::vector<LinearInequality> inequalities;
+    inequalities.reserve(cols);
+    for (std::size_t i=0;i<cols;++i) {
+        LinearInequality q;
+        q.coeff.resize(basis.size(),field.zero());
+        for (std::size_t j=0;j<basis.size();++j)
+            q.coeff[j]=basis[j][i];
+        q.rhs=field.one(); // homogeneity lets strict c_i>0 scale to c_i>=1
+        inequalities.push_back(std::move(q));
+    }
+
+    auto solved=solve_linear_inequalities(field,inequalities,basis.size());
+    if (solved.state!=ConeState::Feasible) return solved;
+
+    std::vector<Alg> kernel(cols,field.zero());
+    for (std::size_t j=0;j<basis.size();++j)
+        for (std::size_t i=0;i<cols;++i)
+            kernel[i]=field.add(kernel[i],field.mul(basis[j][i],solved.parameters[j]));
+
+    if (!matrix_times_vector_zero(field,matrix,kernel))
+        return {ConeState::Indeterminate,{}};
+    const auto signs=summarize_signs(field,kernel);
+    if (signs.indeterminate) return {ConeState::Indeterminate,{}};
+    if (signs.has_zero || signs.has_neg || !signs.has_pos)
+        return {ConeState::Indeterminate,{}};
+
+    if (positive_kernel) *positive_kernel=std::move(kernel);
+    return solved;
+}
+
 NetworkClosureCertificate base_certificate(const NetworkClosureInput& input) {
     NetworkClosureCertificate cert(input);
     cert.canonical_input_digest=sha256_hex(canonicalize_network_closure_input(input));
@@ -594,14 +821,17 @@ NetworkClosureResult result_from_certificate(const NetworkClosureCertificate& ce
     if (cert.proof==NetworkClosureProof::ExactFullRankObstruction)
         out.assurance=ArithmeticAssurance::Exact;
     else if (cert.proof==NetworkClosureProof::CertifiedPositiveRigidKernel ||
-             cert.proof==NetworkClosureProof::CertifiedRigidSignObstruction)
+             cert.proof==NetworkClosureProof::CertifiedRigidSignObstruction ||
+             cert.proof==NetworkClosureProof::CertifiedGeneralPositiveKernel ||
+             cert.proof==NetworkClosureProof::CertifiedGeneralConeObstruction)
         out.assurance=ArithmeticAssurance::CertifiedNumerical;
     else
         out.assurance=ArithmeticAssurance::None;
     out.termination=cert.status==NetworkClosureStatus::Indeterminate
         ? (cert.proof==NetworkClosureProof::CyclotomicOrderLimit ||
            cert.proof==NetworkClosureProof::HigherDimensionalKernel ||
-           cert.proof==NetworkClosureProof::SignCertificationLimit
+           cert.proof==NetworkClosureProof::SignCertificationLimit ||
+           cert.proof==NetworkClosureProof::EliminationComplexityLimit
               ? TerminationReason::PrecisionLimit
               : TerminationReason::BackendFailure)
         : TerminationReason::Completed;
@@ -719,8 +949,24 @@ NetworkClosureResult solve_network_closure(const NetworkClosureInput& input) {
                 cert.rigid_kernel=encode_vector(kernel);
             }
         } else {
-            cert.status=NetworkClosureStatus::Indeterminate;
-            cert.proof=NetworkClosureProof::HigherDimensionalKernel;
+            std::vector<Alg> kernel;
+            const auto cone=solve_general_positive_kernel(
+                sys.field,rr,sys.matrix,m,&kernel);
+
+            if (cone.state==ConeState::Feasible) {
+                cert.status=NetworkClosureStatus::Closed;
+                cert.proof=NetworkClosureProof::CertifiedGeneralPositiveKernel;
+                cert.rigid_kernel=encode_vector(kernel);
+            } else if (cone.state==ConeState::Infeasible) {
+                cert.status=NetworkClosureStatus::NotClosed;
+                cert.proof=NetworkClosureProof::CertifiedGeneralConeObstruction;
+            } else if (cone.state==ConeState::ComplexityLimit) {
+                cert.status=NetworkClosureStatus::Indeterminate;
+                cert.proof=NetworkClosureProof::EliminationComplexityLimit;
+            } else {
+                cert.status=NetworkClosureStatus::Indeterminate;
+                cert.proof=NetworkClosureProof::SignCertificationLimit;
+            }
         }
 
         auto checked=verify_network_closure_certificate(cert);
@@ -760,45 +1006,91 @@ NetworkClosureResult verify_network_closure_certificate(const NetworkClosureCert
             return result_from_certificate(cert);
         }
 
-        if (rank>=m || m-rank!=1) {
+        const std::size_t nullity=m-rank;
+
+        if (nullity==1) {
+            if (cert.rigid_kernel.size()!=m) return invalid_certificate(cert);
+            const auto kernel=decode_vector(sys.field,cert.rigid_kernel);
+            if (!matrix_times_vector_zero(sys.field,sys.matrix,kernel))
+                return invalid_certificate(cert);
+
+            bool nonzero=false;
+            for (const auto& x : kernel) if (!sys.field.is_zero(x)) nonzero=true;
+            if (!nonzero) return invalid_certificate(cert);
+
+            const auto signs=summarize_signs(sys.field,kernel);
+
+            if (cert.status==NetworkClosureStatus::Closed &&
+                cert.proof==NetworkClosureProof::CertifiedPositiveRigidKernel) {
+                if (signs.indeterminate || signs.has_zero || signs.has_neg || !signs.has_pos)
+                    return invalid_certificate(cert);
+                return result_from_certificate(cert);
+            }
+
+            if (cert.status==NetworkClosureStatus::NotClosed &&
+                cert.proof==NetworkClosureProof::CertifiedRigidSignObstruction) {
+                if (signs.indeterminate) return invalid_certificate(cert);
+                if (!(signs.has_zero || (signs.has_pos && signs.has_neg)))
+                    return invalid_certificate(cert);
+                return result_from_certificate(cert);
+            }
+
+            if (cert.status==NetworkClosureStatus::Indeterminate &&
+                cert.proof==NetworkClosureProof::SignCertificationLimit) {
+                if (!signs.indeterminate) return invalid_certificate(cert);
+                return result_from_certificate(cert);
+            }
+            return invalid_certificate(cert);
+        }
+
+        if (nullity>1) {
+            std::vector<Alg> recomputed_kernel;
+            const auto cone=solve_general_positive_kernel(
+                sys.field,rr,sys.matrix,m,&recomputed_kernel);
+
+            if (cert.status==NetworkClosureStatus::Closed &&
+                cert.proof==NetworkClosureProof::CertifiedGeneralPositiveKernel) {
+                if (cone.state!=ConeState::Feasible ||
+                    cert.rigid_kernel.size()!=m)
+                    return invalid_certificate(cert);
+                const auto kernel=decode_vector(sys.field,cert.rigid_kernel);
+                if (!matrix_times_vector_zero(sys.field,sys.matrix,kernel))
+                    return invalid_certificate(cert);
+                const auto signs=summarize_signs(sys.field,kernel);
+                if (signs.indeterminate || signs.has_zero || signs.has_neg || !signs.has_pos)
+                    return invalid_certificate(cert);
+                return result_from_certificate(cert);
+            }
+
+            if (cert.status==NetworkClosureStatus::NotClosed &&
+                cert.proof==NetworkClosureProof::CertifiedGeneralConeObstruction) {
+                if (cone.state!=ConeState::Infeasible || !cert.rigid_kernel.empty())
+                    return invalid_certificate(cert);
+                return result_from_certificate(cert);
+            }
+
+            if (cert.status==NetworkClosureStatus::Indeterminate &&
+                cert.proof==NetworkClosureProof::EliminationComplexityLimit) {
+                if (cone.state!=ConeState::ComplexityLimit || !cert.rigid_kernel.empty())
+                    return invalid_certificate(cert);
+                return result_from_certificate(cert);
+            }
+
+            if (cert.status==NetworkClosureStatus::Indeterminate &&
+                cert.proof==NetworkClosureProof::SignCertificationLimit) {
+                if (cone.state!=ConeState::Indeterminate)
+                    return invalid_certificate(cert);
+                return result_from_certificate(cert);
+            }
+
+            // Backward compatibility for older v1.0 certificates that stopped
+            // at higher-dimensional kernel detection.
             if (cert.status==NetworkClosureStatus::Indeterminate &&
                 cert.proof==NetworkClosureProof::HigherDimensionalKernel &&
-                rank<m && m-rank>1 &&
                 cert.rigid_kernel.empty())
                 return result_from_certificate(cert);
+
             return invalid_certificate(cert);
-        }
-
-        if (cert.rigid_kernel.size()!=m) return invalid_certificate(cert);
-        const auto kernel=decode_vector(sys.field,cert.rigid_kernel);
-        if (!matrix_times_vector_zero(sys.field,sys.matrix,kernel))
-            return invalid_certificate(cert);
-
-        bool nonzero=false;
-        for (const auto& x : kernel) if (!sys.field.is_zero(x)) nonzero=true;
-        if (!nonzero) return invalid_certificate(cert);
-
-        const auto signs=summarize_signs(sys.field,kernel);
-
-        if (cert.status==NetworkClosureStatus::Closed &&
-            cert.proof==NetworkClosureProof::CertifiedPositiveRigidKernel) {
-            if (signs.indeterminate || signs.has_zero || signs.has_neg || !signs.has_pos)
-                return invalid_certificate(cert);
-            return result_from_certificate(cert);
-        }
-
-        if (cert.status==NetworkClosureStatus::NotClosed &&
-            cert.proof==NetworkClosureProof::CertifiedRigidSignObstruction) {
-            if (signs.indeterminate) return invalid_certificate(cert);
-            if (!(signs.has_zero || (signs.has_pos && signs.has_neg)))
-                return invalid_certificate(cert);
-            return result_from_certificate(cert);
-        }
-
-        if (cert.status==NetworkClosureStatus::Indeterminate &&
-            cert.proof==NetworkClosureProof::SignCertificationLimit) {
-            if (!signs.indeterminate) return invalid_certificate(cert);
-            return result_from_certificate(cert);
         }
 
         return invalid_certificate(cert);
