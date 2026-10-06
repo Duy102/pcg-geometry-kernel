@@ -256,7 +256,24 @@ RigidPostClosureCertificate evaluate(const NetworkClosureCertificate& closure) {
             } else if (shared.size()==1) {
                 const auto a=shared_at_vertex(in,emb,chords,e,shared.front());
                 const auto b=shared_at_vertex(in,emb,chords,f,shared.front());
-                hit=pcg_extra_hit(a,b);
+
+                // If the two outgoing tangent lines agree exactly at the
+                // prescribed common endpoint, distinct supporting circles are
+                // tangent there. Two distinct circles cannot then have a
+                // second common point, so the pair is certified clear without
+                // asking the generic ExtraHit interval construction to
+                // separate the tangent boundary.
+                const PiRational tangent_delta=
+                    b.tangent_phase_pi-a.tangent_phase_pi;
+                if (sin_pi_sign(tangent_delta)==0) {
+                    const auto relation=shared_start_support_relation(a,b);
+                    if (relation==SupportRelation::Distinct)
+                        hit=CertifiedTruth::False;
+                    else
+                        hit=CertifiedTruth::Indeterminate;
+                } else {
+                    hit=pcg_extra_hit(a,b);
+                }
             } else if (shared.size()==2) {
                 const auto a=shared_at_vertex(in,emb,chords,e,shared.front());
                 const auto b=shared_at_vertex(in,emb,chords,f,shared.front());

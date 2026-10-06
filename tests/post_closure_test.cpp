@@ -39,6 +39,17 @@ int main() {
     check(pcg_hit(upper,far_lower)==CertifiedTruth::False,
           "general finite-arc Hit certifies separated supporting circles");
 
+    // C1-adjacent arcs share an allowed endpoint with one tangent line.
+    // Distinct tangent support circles have no second intersection.
+    SharedStartArc tangent_a{
+        PiRational{0,1},Turn{PiRational{1,3}},PositiveInterval::point(1.0)};
+    SharedStartArc tangent_b{
+        PiRational{1,1},Turn{PiRational{-1,3}},PositiveInterval::point(1.0)};
+    check(sin_pi_sign(tangent_b.tangent_phase_pi-tangent_a.tangent_phase_pi)==0,
+          "tangent-safe regression uses one exact tangent line");
+    check(shared_start_support_relation(tangent_a,tangent_b)==SupportRelation::Distinct,
+          "tangent-safe regression has distinct support circles");
+
     // Production ABCABC witness: Phase 5B closure is projectively rigid and
     // Phase 6A must recover the same trace-faithful conclusion as the
     // specialized theorem path.
@@ -64,14 +75,6 @@ int main() {
           "embedding exports quotient vertices and normalized chord magnitudes");
 
     auto post=solve_projectively_rigid_post_closure(nc.certificate);
-    if (post.decision!=Decision::Realizable) {
-        std::cerr << "DIAG post decision=" << static_cast<int>(post.decision)
-                  << " proof=" << static_cast<int>(post.proof)
-                  << " termination=" << static_cast<int>(post.termination)
-                  << " witness_a=" << post.certificate.witness_a
-                  << " witness_b=" << post.certificate.witness_b
-                  << " checked_pairs=" << post.certificate.checked_pairs << "\n";
-    }
     check(post.decision==Decision::Realizable,
           "ABCABC witness passes general projectively-rigid post-closure verifier");
     check(post.proof==RigidPostClosureProof::AllPairsClear,
