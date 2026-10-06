@@ -65,6 +65,12 @@ void check_rotation(const std::array<PiRational,6>& q, int rotation, const std::
     check(sum == Rational(BigInt{2*rotation}), label + " rotation sum");
 }
 
+std::string sign_key(const ABCABCSignPattern& signs, int rotation) {
+    std::string key = std::to_string(rotation) + ":";
+    for (int s : signs) key += (s > 0 ? '+' : '-');
+    return key;
+}
+
 void add_witness_orbit(const std::array<PiRational,6>& representative,
                        int rotation,
                        std::set<std::string>& seen,
@@ -72,13 +78,14 @@ void add_witness_orbit(const std::array<PiRational,6>& representative,
                        const std::string& label) {
     for (std::size_t shift=0;shift<6;++shift) {
         auto q = rotate_q(representative,shift);
-        auto input = make_input(q);
-        const auto key = canonicalize_abcabc_input(input);
+        const auto signs = signs_of(q);
+        const auto key = sign_key(signs,rotation);
         if (!seen.insert(key).second) continue;
 
+        auto input = make_input(q);
         ++witness_count;
         check_rotation(q,rotation,label);
-        check(classify_abcabc_sign_rotation(signs_of(q),rotation) == Decision::Realizable,
+        check(classify_abcabc_sign_rotation(signs,rotation) == Decision::Realizable,
               label + " classifier accepts theorem witness");
         const auto solved = solve_abcabc(input);
         check(solved.decision == Decision::Realizable,
