@@ -4,7 +4,7 @@ Theorem-traceable production engineering for Prime-Curve Geometry (PCG).
 
 ## Current status
 
-The repository currently contains a **hardened certified ABCABC vertical slice**, an exact **Seifert turn-flow** layer, and a **Phase 5A projectively-rigid Network Closure** module.
+The repository currently contains a **hardened certified ABCABC vertical slice**, an exact **Seifert turn-flow** layer, a **general certified Network Closure** module, and a **Phase 6A projectively-rigid post-closure geometry** verifier.
 
 It is intentionally narrow: this is **not** a claim that arbitrary-trace PCG or the full PCG framework is production-complete.
 
@@ -68,15 +68,32 @@ The module is intentionally intermediate: Seifert-flow feasibility does not impl
 
 Its validation includes a deterministic 6000-case cross-check against a separate exhaustive exact-cut oracle.
 
-## Phase 5A Network Closure
+## Phase 5A–5B Network Closure
 
-For rational-pi turns, the kernel now builds the Network Closure matrix with exact cyclotomic algebra rather than ordinary floating-point sine/cosine values.
+For rational-pi turns, the kernel builds the Network Closure matrix with exact cyclotomic algebra rather than ordinary floating-point sine/cosine values.
 
-Phase 5A exactly determines matrix rank and kernel dimension. Full-column-rank non-closure is exact. When the network is projectively rigid (`dim ker N = 1`), it reconstructs an exact algebraic kernel vector and certifies whether its components can all be made strictly positive.
+Phase 5A introduced exact matrix rank/nullity, exact full-rank obstruction, and certified projectively-rigid (`dim ker N = 1`) sign decisions.
 
-The production ABCABC rational witness passes this Network Closure layer with cycle-space dimension beta = 4 and a one-dimensional positive kernel.
+Phase 5B extends this to higher-dimensional kernels. A closed instance carries an explicit algebraic positive-kernel witness `c > 0` with `N c = 0`; a non-closed instance carries an explicit Stiemke dual witness `y` with `N^T y >= 0` and `N^T y != 0`. Certificate schema v1.1 verifies these witnesses directly.
 
-The current deliberate limits are cyclotomic order `<= 256` and projectively rigid/full-rank decision paths. Higher-dimensional positive-kernel feasibility is reserved for Phase 5B and currently returns `INDETERMINATE`.
+Validation includes the production ABCABC witness plus regular and open-half-plane cycle families exercising nullity 2 through 6.
+
+The deliberate algebraic software boundary remains cyclotomic order `<= 256`; unresolved real-sign separation returns `INDETERMINATE` rather than a guessed decision.
+
+## Phase 6A projectively-rigid post-closure geometry
+
+Phase 6A implements the first production specialization of the PCG General Fixed-Turn Intersection Feasibility theorem.
+
+For a certified closed network with `dim ker N = 1`, the kernel reconstructs the unique normalized metric skeleton in exact cyclotomic coordinates. It then verifies:
+
+- prescribed-passage multiplicity and tangent transversality;
+- pairwise distinct quotient vertices;
+- every unordered finite circular-arc pair;
+- only the quotient-vertex intersections prescribed by the trace are allowed.
+
+Remote pairs use a general certified finite-arc `Hit` predicate. One-endpoint pairs use `ExtraHit`, with an exact tangent-line fast path for distinct support circles. Finite-arc membership follows the theorem's minor / semicircle / major cross-product formulas.
+
+Tangency, coincident-support, or interval boundaries that cannot be certified return `INDETERMINATE`. Higher-dimensional post-closure length selection is deliberately left for a later phase because the trace-faithful subset of the positive closure polytope can be nonconvex.
 
 ## CI / Trusted Computing Base gates
 
@@ -95,7 +112,7 @@ Every push / pull request runs:
 - `linux-clang-Release`;
 - `linux-gcc-asan-ubsan` (AddressSanitizer + UndefinedBehaviorSanitizer).
 
-The hardened ABCABC merge and the post-merge `main` run passed all five gates.
+The hardened ABCABC, Seifert, and general Network Closure merges passed all five gates. Phase 6A is held to the same five-gate requirement before merge.
 
 This improves reproducibility but is not a fully hermetic build: the GitHub Ubuntu image and package repository can still evolve.
 
@@ -103,10 +120,10 @@ This improves reproducibility but is not a fully hermetic build: the GitHub Ubun
 
 The current repository does not yet provide:
 
-- a general arbitrary-Gauss-word solver;
-- general higher-dimensional Network Closure positivity / Stiemke-dual solving;
-- production `ABCADCBD`;
-- general remote-Hit / global BVH or spatial-index infrastructure;
+- a complete higher-dimensional post-closure length-selection solver for arbitrary fixed-turn traces;
+- production `ABCADCBD` specialization;
+- global BVH / spatial-index acceleration for large remote-pair workloads;
+- variable-turn / sign-rotation general decision machinery;
 - language bindings;
 - a stable public v1 API.
 
