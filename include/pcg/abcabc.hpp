@@ -9,6 +9,14 @@ struct ABCABCInput {
     std::array<Turn, 6> turns;
 };
 
+using ABCABCSignPattern = std::array<int, 6>;
+
+// Exact theorem-level existence classification from
+// PCG_ABCABC_Complete_Sign_Rotation_Classification_v0.4.tex.
+// Each sign must be +1 or -1. Integer rotations outside {-2,0,2}
+// are classified NOT_REALIZABLE by the Seifert rotation filter.
+Decision classify_abcabc_sign_rotation(const ABCABCSignPattern& signs, int rotation);
+
 enum class ABCABCProofReason {
     AllConditionsSatisfied,
     PhaseCongruenceObstruction,

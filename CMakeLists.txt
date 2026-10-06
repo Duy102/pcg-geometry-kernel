@@ -19,3 +19,7 @@ add_test(NAME pcg_tests COMMAND pcg_tests)
 add_executable(pcg_golden_tests tests/golden_test.cpp)
 target_link_libraries(pcg_golden_tests PRIVATE pcg)
 add_test(NAME pcg_golden_tests COMMAND pcg_golden_tests ${CMAKE_SOURCE_DIR}/corpus/abcabc-conformance-v1.csv)
+
+add_executable(pcg_sign_rotation_tests tests/sign_rotation_test.cpp)
+target_link_libraries(pcg_sign_rotation_tests PRIVATE pcg)
+add_test(NAME pcg_sign_rotation_tests COMMAND pcg_sign_rotation_tests ${CMAKE_SOURCE_DIR}/corpus/abcabc-sign-rotation-v1.csv)

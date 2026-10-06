@@ -19,3 +19,7 @@ Publication note: the reviewed Phase 0–3 source archive was reconstructed on G
 Current deliberate limitation: theorem-facing input uses exact rational multiples of pi. This avoids false exact-modulo claims for decimal-radian approximations. Broader real-input encodings are future work.
 
 Remote GCC/Clang CI is the merge gate for this branch. CI installs the required Boost headers explicitly on the Ubuntu runner.
+
+## Hardening checkpoint: exhaustive ABCABC sign--rotation conformance
+
+The v0.4 complete sign--rotation theorem is encoded as an exact classifier and an explicit 192-row conformance corpus (64 sign patterns x rotations -2, 0, 2). CI also expands the manuscript's five rational orbit witnesses by cyclic shift and global sign reflection, producing 36 distinct fixed-turn witnesses and requiring the production `solve_abcabc` path plus certificate verifier to accept all 36.

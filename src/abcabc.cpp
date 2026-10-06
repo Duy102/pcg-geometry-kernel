@@ -6,6 +6,43 @@
 namespace pcg {
 namespace {
 
+constexpr ABCABCSignPattern kR0Representative{{+1,+1,+1,-1,-1,-1}};
+constexpr std::array<ABCABCSignPattern,4> kR2Representatives{{
+    ABCABCSignPattern{{+1,+1,+1,+1,+1,+1}},
+    ABCABCSignPattern{{+1,+1,+1,+1,+1,-1}},
+    ABCABCSignPattern{{+1,+1,+1,-1,+1,-1}},
+    ABCABCSignPattern{{+1,-1,+1,-1,+1,-1}}
+}};
+
+ABCABCSignPattern rotate_left(const ABCABCSignPattern& s, std::size_t shift) {
+    ABCABCSignPattern out{};
+    for (std::size_t i=0;i<6;++i) out[i]=s[(i+shift)%6];
+    return out;
+}
+
+ABCABCSignPattern reversed_signs(const ABCABCSignPattern& s) {
+    ABCABCSignPattern out{};
+    for (std::size_t i=0;i<6;++i) out[i]=-s[i];
+    return out;
+}
+
+bool is_valid_sign_pattern(const ABCABCSignPattern& s) {
+    for (int x : s) if (x != +1 && x != -1) return false;
+    return true;
+}
+
+bool in_cyclic_orbit(const ABCABCSignPattern& s, const ABCABCSignPattern& representative) {
+    for (std::size_t shift=0;shift<6;++shift)
+        if (s == rotate_left(representative,shift)) return true;
+    return false;
+}
+
+bool r2_class_realizable(const ABCABCSignPattern& s) {
+    for (const auto& representative : kR2Representatives)
+        if (in_cyclic_orbit(s,representative)) return true;
+    return false;
+}
+
 PiRational half(PiRational q) { return q / 2; }
 
 std::array<PiRational,6> qturns(const ABCABCInput& in) {
@@ -112,6 +149,25 @@ ABCABCResult result_from_eval(const ABCABCInput& in, const Evaluation& e) {
         e.decision==Decision::Indeterminate ? TerminationReason::PrecisionLimit : TerminationReason::Completed,
         cert};
 }
+}
+
+Decision classify_abcabc_sign_rotation(const ABCABCSignPattern& signs, int rotation) {
+    if (!is_valid_sign_pattern(signs))
+        throw std::invalid_argument("ABCABC sign pattern entries must be +1 or -1");
+
+    if (rotation == 0)
+        return in_cyclic_orbit(signs,kR0Representative)
+            ? Decision::Realizable : Decision::NotRealizable;
+
+    if (rotation == 2)
+        return r2_class_realizable(signs)
+            ? Decision::Realizable : Decision::NotRealizable;
+
+    if (rotation == -2)
+        return r2_class_realizable(reversed_signs(signs))
+            ? Decision::Realizable : Decision::NotRealizable;
+
+    return Decision::NotRealizable;
 }
 
 std::string canonicalize_abcabc_input(const ABCABCInput& input) {
