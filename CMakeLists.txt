@@ -11,6 +11,7 @@ add_library(pcg STATIC
     src/abcabc_verify.cpp
     src/seifert_flow.cpp
     src/network_closure.cpp
+    src/post_closure.cpp
 )
 target_include_directories(pcg PUBLIC include)
 target_link_libraries(pcg PUBLIC OpenSSL::Crypto)
@@ -34,3 +35,7 @@ add_test(NAME pcg_seifert_flow_tests COMMAND pcg_seifert_flow_tests)
 add_executable(pcg_network_closure_tests tests/network_closure_test.cpp)
 target_link_libraries(pcg_network_closure_tests PRIVATE pcg)
 add_test(NAME pcg_network_closure_tests COMMAND pcg_network_closure_tests)
+
+add_executable(pcg_post_closure_tests tests/post_closure_test.cpp)
+target_link_libraries(pcg_post_closure_tests PRIVATE pcg)
+add_test(NAME pcg_post_closure_tests COMMAND pcg_post_closure_tests)

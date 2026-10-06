@@ -156,4 +156,139 @@ SupportRelation shared_start_support_relation(const SharedStartArc& a, const Sha
     }
 }
 
+
+namespace {
+
+CertifiedTruth closed_nonnegative(const I& x) {
+    if (x.lower() >= 0.0) return CertifiedTruth::True;
+    if (x.upper() < 0.0) return CertifiedTruth::False;
+    return CertifiedTruth::Indeterminate;
+}
+
+CertifiedTruth truth_and(CertifiedTruth a, CertifiedTruth b) {
+    if (a==CertifiedTruth::False || b==CertifiedTruth::False)
+        return CertifiedTruth::False;
+    if (a==CertifiedTruth::True && b==CertifiedTruth::True)
+        return CertifiedTruth::True;
+    return CertifiedTruth::Indeterminate;
+}
+
+CertifiedTruth truth_or(CertifiedTruth a, CertifiedTruth b) {
+    if (a==CertifiedTruth::True || b==CertifiedTruth::True)
+        return CertifiedTruth::True;
+    if (a==CertifiedTruth::False && b==CertifiedTruth::False)
+        return CertifiedTruth::False;
+    return CertifiedTruth::Indeterminate;
+}
+
+I cross_i(const I& ax,const I& ay,const I& bx,const I& by) {
+    return ax*by-ay*bx;
+}
+
+struct FiniteCenterRadius {
+    I cx;
+    I cy;
+    I radius;
+};
+
+FiniteCenterRadius finite_center_radius(const CertifiedFiniteArc& arc) {
+    const I sin_half=certified_sin_pi(arc.turn.pi/2).interval();
+    const I rho=arc.chord.scalar().interval()/(I(2.0)*sin_half);
+    const I s=certified_sin_pi(arc.tangent_phase_pi).interval();
+    const I c=certified_cos_pi(arc.tangent_phase_pi).interval();
+    const I cx=arc.source.x.interval()-rho*s;
+    const I cy=arc.source.y.interval()+rho*c;
+    return {cx,cy,abs_i(rho)};
+}
+
+CertifiedTruth finite_arc_membership(const CertifiedFiniteArc& arc,
+                                     const FiniteCenterRadius& support,
+                                     const I& qx,const I& qy) {
+    const I rmx=arc.source.x.interval()-support.cx;
+    const I rmy=arc.source.y.interval()-support.cy;
+    const I rpx=arc.target.x.interval()-support.cx;
+    const I rpy=arc.target.y.interval()-support.cy;
+    const I xx=qx-support.cx;
+    const I xy=qy-support.cy;
+    const double orient=arc.turn.pi.value > Rational(BigInt{0}) ? 1.0 : -1.0;
+
+    const I A=I(orient)*cross_i(rmx,rmy,xx,xy);
+    const I B=I(orient)*cross_i(xx,xy,rpx,rpy);
+    const auto a=closed_nonnegative(A);
+    const auto b=closed_nonnegative(B);
+
+    Rational mag=arc.turn.pi.value;
+    if (mag<Rational(BigInt{0})) mag=-mag;
+    if (mag<Rational(BigInt{1})) return truth_and(a,b);
+    if (mag==Rational(BigInt{1})) return a;
+    return truth_or(a,b);
+}
+
+CertifiedTruth common_membership(const CertifiedFiniteArc& a,
+                                 const FiniteCenterRadius& ca,
+                                 const CertifiedFiniteArc& b,
+                                 const FiniteCenterRadius& cb,
+                                 const I& qx,const I& qy) {
+    return truth_and(finite_arc_membership(a,ca,qx,qy),
+                     finite_arc_membership(b,cb,qx,qy));
+}
+
+} // namespace
+
+CertifiedTruth pcg_hit(const CertifiedFiniteArc& a, const CertifiedFiniteArc& b) {
+    try {
+        const auto ca=finite_center_radius(a);
+        const auto cb=finite_center_radius(b);
+
+        const I dx=cb.cx-ca.cx;
+        const I dy=cb.cy-ca.cy;
+        const I d2=dx*dx+dy*dy;
+
+        if (d2.upper()<=0.0) {
+            const I dr=abs_i(ca.radius-cb.radius);
+            if (dr.lower()>0.0) return CertifiedTruth::False;
+            return CertifiedTruth::Indeterminate;
+        }
+        if (d2.lower()<=0.0) return CertifiedTruth::Indeterminate;
+
+        const I d=boost::numeric::sqrt(d2);
+        const I sum=ca.radius+cb.radius;
+        const I diff=abs_i(ca.radius-cb.radius);
+
+        if (d.lower()>sum.upper()) return CertifiedTruth::False;
+        if (d.upper()<diff.lower()) return CertifiedTruth::False;
+
+        // Phase 6A deliberately requires a certified two-intersection support
+        // configuration. Tangency boundaries are left Indeterminate.
+        if (!(d.upper()<sum.lower() && d.lower()>diff.upper()))
+            return CertifiedTruth::Indeterminate;
+
+        const I along=(ca.radius*ca.radius-cb.radius*cb.radius+d2)/(I(2.0)*d);
+        const I h2=ca.radius*ca.radius-along*along;
+        if (h2.lower()<=0.0) return CertifiedTruth::Indeterminate;
+        const I h=boost::numeric::sqrt(h2);
+
+        const I ux=dx/d;
+        const I uy=dy/d;
+        const I bx=ca.cx+along*ux;
+        const I by=ca.cy+along*uy;
+        const I px=-uy;
+        const I py=ux;
+
+        const auto q1=common_membership(
+            a,ca,b,cb,bx+h*px,by+h*py);
+        if (q1==CertifiedTruth::True) return CertifiedTruth::True;
+
+        const auto q2=common_membership(
+            a,ca,b,cb,bx-h*px,by-h*py);
+        if (q2==CertifiedTruth::True) return CertifiedTruth::True;
+
+        if (q1==CertifiedTruth::False && q2==CertifiedTruth::False)
+            return CertifiedTruth::False;
+        return CertifiedTruth::Indeterminate;
+    } catch (...) {
+        return CertifiedTruth::Indeterminate;
+    }
+}
+
 } // namespace pcg
