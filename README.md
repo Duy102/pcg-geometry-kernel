@@ -4,7 +4,7 @@ Theorem-traceable production engineering for Prime-Curve Geometry (PCG).
 
 ## Current status
 
-The repository currently contains a **hardened certified ABCABC vertical slice**, an exact **Seifert turn-flow** layer, a **general certified Network Closure** module, a **Phase 6A projectively-rigid post-closure geometry** verifier, and a **Phase 6B1 higher-dimensional positive-kernel witness** path.
+The repository currently contains a **hardened certified ABCABC vertical slice**, an exact **Seifert turn-flow** layer, a **general certified Network Closure** module, a **Phase 6A projectively-rigid post-closure geometry** verifier, and a **Phase 6B1 higher-dimensional positive-kernel witness** path, and a **Phase 6B2A solver-neutral semialgebraic IR compiler**.
 
 It is intentionally narrow: this is **not** a claim that arbitrary-trace PCG or the full PCG framework is production-complete.
 
@@ -107,6 +107,14 @@ The logic is deliberately asymmetric:
 
 This implements a sound higher-dimensional existence path without pretending that one sampled point solves the theorem's generally nonconvex length-selection problem. Full logical completeness for higher-dimensional fixed-turn traces still requires a finite semialgebraic decision backend, e.g. real quantifier elimination / CAD, or a mathematically equivalent specialized solver.
 
+## Phase 6B2A semialgebraic backend contract
+
+The kernel now compiles every rational-pi fixed-turn trace into a deterministic, versioned solver-neutral IR matching the General Fixed-Turn Intersection Feasibility theorem's quantified sentence.
+
+The IR records exact tangent/chord phases, minor/semicircle/major arc branches, all quotient-vertex distinctness constraints, every unordered bad-pair incidence formula with its allowed common vertices, prescribed fixed-tangent transversality checks, and quantifier counts. It is bound to the canonical input and theorem source by SHA-256 and can be independently recompiled and structurally verified.
+
+This phase freezes the theorem-to-solver boundary. It does **not** yet trust or embed a CAD / real-quantifier-elimination engine, and therefore does not add new global decisions beyond the existing certified paths.
+
 ## CI / Trusted Computing Base gates
 
 The current CI baseline uses:
@@ -132,7 +140,7 @@ This improves reproducibility but is not a fully hermetic build: the GitHub Ubun
 
 The current repository does not yet provide:
 
-- a complete higher-dimensional post-closure length-selection solver (real quantifier elimination / equivalent exact semialgebraic backend) for arbitrary fixed-turn traces;
+- an evidence-verifiable exact backend for the Phase 6B2A semialgebraic IR (real quantifier elimination / CAD or an equivalent exact solver);
 - production `ABCADCBD` specialization;
 - global BVH / spatial-index acceleration for large remote-pair workloads;
 - variable-turn / sign-rotation general decision machinery;
