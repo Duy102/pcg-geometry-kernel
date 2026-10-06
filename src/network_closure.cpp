@@ -591,9 +591,13 @@ NetworkClosureResult result_from_certificate(const NetworkClosureCertificate& ce
     NetworkClosureResult out(cert);
     out.status=cert.status;
     out.proof=cert.proof;
-    out.assurance=(cert.status==NetworkClosureStatus::Closed ||
-                   cert.status==NetworkClosureStatus::NotClosed)
-        ? ArithmeticAssurance::Exact : ArithmeticAssurance::None;
+    if (cert.proof==NetworkClosureProof::ExactFullRankObstruction)
+        out.assurance=ArithmeticAssurance::Exact;
+    else if (cert.proof==NetworkClosureProof::CertifiedPositiveRigidKernel ||
+             cert.proof==NetworkClosureProof::CertifiedRigidSignObstruction)
+        out.assurance=ArithmeticAssurance::CertifiedNumerical;
+    else
+        out.assurance=ArithmeticAssurance::None;
     out.termination=cert.status==NetworkClosureStatus::Indeterminate
         ? (cert.proof==NetworkClosureProof::CyclotomicOrderLimit ||
            cert.proof==NetworkClosureProof::HigherDimensionalKernel ||
@@ -707,11 +711,11 @@ NetworkClosureResult solve_network_closure(const NetworkClosureInput& input) {
                     for (auto& x : kernel) x=sys.field.neg(x);
                 }
                 cert.status=NetworkClosureStatus::Closed;
-                cert.proof=NetworkClosureProof::ExactPositiveRigidKernel;
+                cert.proof=NetworkClosureProof::CertifiedPositiveRigidKernel;
                 cert.rigid_kernel=encode_vector(kernel);
             } else {
                 cert.status=NetworkClosureStatus::NotClosed;
-                cert.proof=NetworkClosureProof::ExactRigidSignObstruction;
+                cert.proof=NetworkClosureProof::CertifiedRigidSignObstruction;
                 cert.rigid_kernel=encode_vector(kernel);
             }
         } else {
@@ -777,14 +781,14 @@ NetworkClosureResult verify_network_closure_certificate(const NetworkClosureCert
         const auto signs=summarize_signs(sys.field,kernel);
 
         if (cert.status==NetworkClosureStatus::Closed &&
-            cert.proof==NetworkClosureProof::ExactPositiveRigidKernel) {
+            cert.proof==NetworkClosureProof::CertifiedPositiveRigidKernel) {
             if (signs.indeterminate || signs.has_zero || signs.has_neg || !signs.has_pos)
                 return invalid_certificate(cert);
             return result_from_certificate(cert);
         }
 
         if (cert.status==NetworkClosureStatus::NotClosed &&
-            cert.proof==NetworkClosureProof::ExactRigidSignObstruction) {
+            cert.proof==NetworkClosureProof::CertifiedRigidSignObstruction) {
             if (signs.indeterminate) return invalid_certificate(cert);
             if (!(signs.has_zero || (signs.has_pos && signs.has_neg)))
                 return invalid_certificate(cert);

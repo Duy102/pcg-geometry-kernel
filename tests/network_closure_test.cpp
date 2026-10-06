@@ -34,10 +34,10 @@ int main() {
     auto c=solve_network_closure(closed_tri);
     check(c.status==NetworkClosureStatus::Closed,
           "equilateral direction triangle is exactly closed");
-    check(c.proof==NetworkClosureProof::ExactPositiveRigidKernel,
-          "closed triangle has exact positive rigid-kernel proof");
-    check(c.assurance==ArithmeticAssurance::Exact,
-          "closed triangle is exact");
+    check(c.proof==NetworkClosureProof::CertifiedPositiveRigidKernel,
+          "closed triangle has certified positive rigid-kernel proof");
+    check(c.assurance==ArithmeticAssurance::CertifiedNumerical,
+          "closed triangle uses exact algebra plus certified sign separation");
     check(verify_network_closure_certificate(c.certificate).status==NetworkClosureStatus::Closed,
           "closed triangle certificate verifies");
 
@@ -47,8 +47,8 @@ int main() {
     auto o=solve_network_closure(open_tri);
     check(o.status==NetworkClosureStatus::NotClosed,
           "upper-half-plane triangle has no positive network closure");
-    check(o.proof==NetworkClosureProof::ExactRigidSignObstruction,
-          "nonclosed triangle has exact rigid sign obstruction");
+    check(o.proof==NetworkClosureProof::CertifiedRigidSignObstruction,
+          "nonclosed triangle has certified rigid sign obstruction");
     check(verify_network_closure_certificate(o.certificate).status==NetworkClosureStatus::NotClosed,
           "nonclosed triangle certificate verifies");
 
@@ -79,7 +79,7 @@ int main() {
     auto a=solve_network_closure(abcabc);
     check(a.status==NetworkClosureStatus::Closed,
           "ABCABC production witness passes exact network closure");
-    check(a.proof==NetworkClosureProof::ExactPositiveRigidKernel,
+    check(a.proof==NetworkClosureProof::CertifiedPositiveRigidKernel,
           "ABCABC witness is projectively rigid with positive kernel");
     check(verify_network_closure_certificate(a.certificate).status==NetworkClosureStatus::Closed,
           "ABCABC network certificate verifies");

@@ -25,9 +25,9 @@ enum class NetworkClosureStatus {
 };
 
 enum class NetworkClosureProof {
-    ExactPositiveRigidKernel,
+    CertifiedPositiveRigidKernel,
     ExactFullRankObstruction,
-    ExactRigidSignObstruction,
+    CertifiedRigidSignObstruction,
     HigherDimensionalKernel,
     CyclotomicOrderLimit,
     SignCertificationLimit,
