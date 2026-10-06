@@ -319,6 +319,234 @@ RigidPostClosureCertificate evaluate(const NetworkClosureCertificate& closure) {
     cert.witness_a=kNoIndex;
     cert.witness_b=kNoIndex;
     return cert;
+
+PositiveKernelPostClosureCertificate base_positive_kernel_certificate(
+    const NetworkClosureCertificate& c) {
+    PositiveKernelPostClosureCertificate out(c);
+    out.closure_binding_digest=closure_binding(c);
+    return out;
+}
+
+PositiveKernelPostClosureResult positive_kernel_result_from_certificate(
+    const PositiveKernelPostClosureCertificate& c) {
+    PositiveKernelPostClosureResult out(c);
+    out.decision=c.decision;
+    out.proof=c.proof;
+    out.assurance=c.assurance;
+    out.termination=c.termination;
+    return out;
+}
+
+PositiveKernelPostClosureResult invalid_positive_kernel_certificate(
+    const PositiveKernelPostClosureCertificate& c) {
+    PositiveKernelPostClosureCertificate bad=c;
+    bad.decision=Decision::Indeterminate;
+    bad.proof=PositiveKernelPostClosureProof::BackendFailure;
+    bad.assurance=ArithmeticAssurance::None;
+    bad.termination=TerminationReason::BackendFailure;
+    return positive_kernel_result_from_certificate(bad);
+}
+
+bool positive_kernel_metadata_ok(const PositiveKernelPostClosureCertificate& c) {
+    return c.schema=="pcg-positive-kernel-post-closure-certificate" &&
+           c.schema_version=="1.0" &&
+           c.theorem_id==kTheoremId &&
+           c.source_digest.algorithm=="SHA-256" &&
+           c.source_digest.value==kSourceDigest &&
+           c.closure_binding_digest==closure_binding(c.closure_certificate);
+}
+
+PositiveKernelPostClosureCertificate evaluate_positive_kernel_witness(
+    const NetworkClosureCertificate& closure) {
+    auto cert=base_positive_kernel_certificate(closure);
+
+    const auto verified=verify_network_closure_certificate(closure);
+    if (verified.termination==TerminationReason::BackendFailure) {
+        cert.proof=PositiveKernelPostClosureProof::BackendFailure;
+        return cert;
+    }
+    if (verified.status==NetworkClosureStatus::Indeterminate) {
+        cert.decision=Decision::Indeterminate;
+        cert.proof=PositiveKernelPostClosureProof::PairCertificationLimit;
+        cert.termination=verified.termination;
+        return cert;
+    }
+    if (verified.status==NetworkClosureStatus::NotClosed) {
+        cert.decision=Decision::NotRealizable;
+        cert.proof=PositiveKernelPostClosureProof::NetworkClosureObstruction;
+        cert.assurance=verified.assurance;
+        cert.termination=TerminationReason::Completed;
+        return cert;
+    }
+
+    const auto reconstructed=reconstruct_positive_kernel_embedding(closure);
+    if (reconstructed.status!=ProjectivelyRigidEmbeddingStatus::Ready) {
+        cert.decision=Decision::Indeterminate;
+        cert.proof=reconstructed.status==ProjectivelyRigidEmbeddingStatus::InvalidCertificate
+            ? PositiveKernelPostClosureProof::BackendFailure
+            : PositiveKernelPostClosureProof::PairCertificationLimit;
+        cert.termination=reconstructed.status==ProjectivelyRigidEmbeddingStatus::InvalidCertificate
+            ? TerminationReason::BackendFailure
+            : TerminationReason::PrecisionLimit;
+        return cert;
+    }
+
+    const auto& in=closure.input;
+    const auto& emb=reconstructed.embedding;
+    const std::size_t m=in.turns.size();
+
+    std::vector<std::vector<std::size_t>> occurrences(in.vertex_count);
+    for (std::size_t e=0;e<m;++e)
+        occurrences[in.trace_vertices[e]].push_back(e);
+    for (std::size_t v=0;v<occurrences.size();++v) {
+        if (occurrences[v].size()>2) {
+            cert.decision=Decision::Unsupported;
+            cert.proof=PositiveKernelPostClosureProof::UnsupportedTraceMultiplicity;
+            cert.assurance=ArithmeticAssurance::Exact;
+            cert.termination=TerminationReason::Completed;
+            cert.witness_a=v;
+            return cert;
+        }
+        if (occurrences[v].size()==2) {
+            const auto delta=emb.tangent_phase_pi[occurrences[v][1]]
+                           - emb.tangent_phase_pi[occurrences[v][0]];
+            if (sin_pi_sign(delta)==0) {
+                cert.decision=Decision::Unsupported;
+                cert.proof=PositiveKernelPostClosureProof::NonTransversePrescribedPassage;
+                cert.assurance=ArithmeticAssurance::Exact;
+                cert.termination=TerminationReason::Completed;
+                cert.witness_a=v;
+                return cert;
+            }
+        }
+    }
+
+    for (std::size_t v=0;v<emb.vertices.size();++v) {
+        for (std::size_t w=v+1;w<emb.vertices.size();++w) {
+            const auto rel=vertex_relation(emb.cyclotomic_order,
+                                           emb.vertices[v],emb.vertices[w]);
+            if (rel==VertexRelation::Coincident) {
+                // In a higher-dimensional positive closure space this rejects
+                // only the supplied metric witness. Another positive kernel
+                // vector may still separate the vertices.
+                cert.decision=Decision::Indeterminate;
+                cert.proof=PositiveKernelPostClosureProof::WitnessVertexCollision;
+                cert.assurance=ArithmeticAssurance::Exact;
+                cert.termination=TerminationReason::Completed;
+                cert.witness_a=v;
+                cert.witness_b=w;
+                return cert;
+            }
+            if (rel==VertexRelation::Indeterminate) {
+                cert.decision=Decision::Indeterminate;
+                cert.proof=PositiveKernelPostClosureProof::PairCertificationLimit;
+                cert.termination=TerminationReason::PrecisionLimit;
+                cert.witness_a=v;
+                cert.witness_b=w;
+                return cert;
+            }
+        }
+    }
+
+    std::vector<CertifiedPoint2> vertices;
+    vertices.reserve(emb.vertices.size());
+    for (const auto& p:emb.vertices)
+        vertices.push_back(certified_point(emb.cyclotomic_order,p));
+
+    std::vector<PositiveInterval> chords;
+    chords.reserve(m);
+    for (const auto& c:emb.chord_magnitudes) {
+        const auto ci=certified_algebraic_real(emb.cyclotomic_order,c);
+        if (!(ci.lower()>0.0)) {
+            cert.decision=Decision::Indeterminate;
+            cert.proof=PositiveKernelPostClosureProof::PairCertificationLimit;
+            cert.termination=TerminationReason::PrecisionLimit;
+            return cert;
+        }
+        chords.emplace_back(ci);
+    }
+
+    std::vector<CertifiedFiniteArc> arcs;
+    arcs.reserve(m);
+    for (std::size_t e=0;e<m;++e) {
+        const std::size_t tail=in.trace_vertices[e];
+        const std::size_t head=in.trace_vertices[(e+1)%m];
+        arcs.push_back(CertifiedFiniteArc{
+            vertices[tail],vertices[head],emb.tangent_phase_pi[e],
+            in.turns[e],chords[e]});
+    }
+
+    for (std::size_t e=0;e<m;++e) {
+        for (std::size_t f=e+1;f<m;++f) {
+            ++cert.checked_pairs;
+            const auto shared=shared_vertices(in,e,f);
+            CertifiedTruth hit=CertifiedTruth::Indeterminate;
+
+            if (shared.empty()) {
+                hit=pcg_hit(arcs[e],arcs[f]);
+            } else if (shared.size()==1) {
+                const auto a=shared_at_vertex(in,emb,chords,e,shared.front());
+                const auto b=shared_at_vertex(in,emb,chords,f,shared.front());
+                const PiRational tangent_delta=
+                    b.tangent_phase_pi-a.tangent_phase_pi;
+                if (sin_pi_sign(tangent_delta)==0) {
+                    const auto relation=shared_start_support_relation(a,b);
+                    if (relation==SupportRelation::Distinct)
+                        hit=CertifiedTruth::False;
+                    else
+                        hit=CertifiedTruth::Indeterminate;
+                } else {
+                    hit=pcg_extra_hit(a,b);
+                }
+            } else if (shared.size()==2) {
+                const auto a=shared_at_vertex(in,emb,chords,e,shared.front());
+                const auto b=shared_at_vertex(in,emb,chords,f,shared.front());
+                const auto relation=shared_start_support_relation(a,b);
+                if (relation==SupportRelation::Distinct)
+                    hit=CertifiedTruth::False;
+                else
+                    hit=CertifiedTruth::Indeterminate;
+            } else {
+                cert.decision=Decision::Unsupported;
+                cert.proof=PositiveKernelPostClosureProof::UnsupportedTraceMultiplicity;
+                cert.assurance=ArithmeticAssurance::Exact;
+                cert.termination=TerminationReason::Completed;
+                cert.witness_a=e;
+                cert.witness_b=f;
+                return cert;
+            }
+
+            if (hit==CertifiedTruth::True) {
+                // A bad point of the positive closure polytope is not a global
+                // non-realizability certificate when the kernel has dimension
+                // greater than one.
+                cert.decision=Decision::Indeterminate;
+                cert.proof=PositiveKernelPostClosureProof::WitnessUnintendedIntersection;
+                cert.assurance=ArithmeticAssurance::CertifiedNumerical;
+                cert.termination=TerminationReason::Completed;
+                cert.witness_a=e;
+                cert.witness_b=f;
+                return cert;
+            }
+            if (hit==CertifiedTruth::Indeterminate) {
+                cert.decision=Decision::Indeterminate;
+                cert.proof=PositiveKernelPostClosureProof::PairCertificationLimit;
+                cert.termination=TerminationReason::PrecisionLimit;
+                cert.witness_a=e;
+                cert.witness_b=f;
+                return cert;
+            }
+        }
+    }
+
+    cert.decision=Decision::Realizable;
+    cert.proof=PositiveKernelPostClosureProof::TraceFaithfulMetricWitness;
+    cert.assurance=ArithmeticAssurance::CertifiedNumerical;
+    cert.termination=TerminationReason::Completed;
+    cert.witness_a=kNoIndex;
+    cert.witness_b=kNoIndex;
+    return cert;
+}
 }
 
 } // namespace
@@ -365,5 +593,51 @@ RigidPostClosureResult verify_projectively_rigid_post_closure_certificate(
         return invalid_certificate(cert);
     }
 }
+
+std::string serialize_positive_kernel_post_closure_certificate(
+    const PositiveKernelPostClosureCertificate& c) {
+    std::ostringstream os;
+    os << "{\"schema\":\"" << c.schema
+       << "\",\"schema_version\":\"" << c.schema_version
+       << "\",\"theorem_id\":\"" << c.theorem_id
+       << "\",\"source_digest\":\"" << c.source_digest.value
+       << "\",\"closure_binding_digest\":\"" << c.closure_binding_digest
+       << "\",\"decision\":" << static_cast<int>(c.decision)
+       << ",\"proof\":" << static_cast<int>(c.proof)
+       << ",\"assurance\":" << static_cast<int>(c.assurance)
+       << ",\"termination\":" << static_cast<int>(c.termination)
+       << ",\"witness_a\":" << c.witness_a
+       << ",\"witness_b\":" << c.witness_b
+       << ",\"checked_pairs\":" << c.checked_pairs
+       << "}";
+    return os.str();
+}
+
+PositiveKernelPostClosureResult solve_positive_kernel_post_closure_witness(
+    const NetworkClosureCertificate& closure_certificate) {
+    return positive_kernel_result_from_certificate(
+        evaluate_positive_kernel_witness(closure_certificate));
+}
+
+PositiveKernelPostClosureResult verify_positive_kernel_post_closure_certificate(
+    const PositiveKernelPostClosureCertificate& cert) {
+    try {
+        if (!positive_kernel_metadata_ok(cert))
+            return invalid_positive_kernel_certificate(cert);
+        const auto expected=evaluate_positive_kernel_witness(cert.closure_certificate);
+        if (expected.decision!=cert.decision ||
+            expected.proof!=cert.proof ||
+            expected.assurance!=cert.assurance ||
+            expected.termination!=cert.termination ||
+            expected.witness_a!=cert.witness_a ||
+            expected.witness_b!=cert.witness_b ||
+            expected.checked_pairs!=cert.checked_pairs)
+            return invalid_positive_kernel_certificate(cert);
+        return positive_kernel_result_from_certificate(cert);
+    } catch (...) {
+        return invalid_positive_kernel_certificate(cert);
+    }
+}
+
 
 } // namespace pcg

@@ -1121,7 +1121,7 @@ CertifiedScalar certified_algebraic_real(
     return CertifiedScalar(acc);
 }
 
-ProjectivelyRigidEmbeddingResult reconstruct_projectively_rigid_embedding(
+ProjectivelyRigidEmbeddingResult reconstruct_positive_kernel_embedding(
     const NetworkClosureCertificate& cert) {
     ProjectivelyRigidEmbeddingResult out;
 
@@ -1141,10 +1141,6 @@ ProjectivelyRigidEmbeddingResult reconstruct_projectively_rigid_embedding(
         }
 
         const std::size_t m=cert.input.turns.size();
-        if (cert.exact_rank>=m || m-cert.exact_rank!=1) {
-            out.status=ProjectivelyRigidEmbeddingStatus::NotProjectivelyRigid;
-            return out;
-        }
 
         auto sys=build_exact_system(cert.input);
         if (!sys.supported || sys.order!=cert.cyclotomic_order) {
@@ -1234,6 +1230,41 @@ ProjectivelyRigidEmbeddingResult reconstruct_projectively_rigid_embedding(
         out.status=ProjectivelyRigidEmbeddingStatus::Ready;
         return out;
     } catch (...) {
+        out.status=ProjectivelyRigidEmbeddingStatus::InvalidCertificate;
+        return out;
+    }
+}
+
+
+ProjectivelyRigidEmbeddingResult reconstruct_projectively_rigid_embedding(
+    const NetworkClosureCertificate& cert) {
+    try {
+        const auto verified=verify_network_closure_certificate(cert);
+        if (verified.termination==TerminationReason::BackendFailure) {
+            ProjectivelyRigidEmbeddingResult out;
+            out.status=ProjectivelyRigidEmbeddingStatus::InvalidCertificate;
+            return out;
+        }
+        if (verified.status==NetworkClosureStatus::Indeterminate) {
+            ProjectivelyRigidEmbeddingResult out;
+            out.status=ProjectivelyRigidEmbeddingStatus::Indeterminate;
+            return out;
+        }
+        if (verified.status!=NetworkClosureStatus::Closed) {
+            ProjectivelyRigidEmbeddingResult out;
+            out.status=ProjectivelyRigidEmbeddingStatus::NotClosed;
+            return out;
+        }
+
+        const std::size_t m=cert.input.turns.size();
+        if (cert.exact_rank>=m || m-cert.exact_rank!=1) {
+            ProjectivelyRigidEmbeddingResult out;
+            out.status=ProjectivelyRigidEmbeddingStatus::NotProjectivelyRigid;
+            return out;
+        }
+        return reconstruct_positive_kernel_embedding(cert);
+    } catch (...) {
+        ProjectivelyRigidEmbeddingResult out;
         out.status=ProjectivelyRigidEmbeddingStatus::InvalidCertificate;
         return out;
     }

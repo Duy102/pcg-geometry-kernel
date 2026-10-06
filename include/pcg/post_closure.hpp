@@ -56,6 +56,63 @@ struct RigidPostClosureResult {
     RigidPostClosureCertificate certificate;
 };
 
+
+enum class PositiveKernelPostClosureProof {
+    TraceFaithfulMetricWitness,
+    NetworkClosureObstruction,
+    WitnessVertexCollision,
+    WitnessUnintendedIntersection,
+    NonTransversePrescribedPassage,
+    UnsupportedTraceMultiplicity,
+    PairCertificationLimit,
+    BackendFailure,
+    None
+};
+
+struct PositiveKernelPostClosureCertificate {
+    explicit PositiveKernelPostClosureCertificate(const NetworkClosureCertificate& c)
+        : closure_certificate(c) {}
+
+    std::string schema{"pcg-positive-kernel-post-closure-certificate"};
+    std::string schema_version{"1.0"};
+    std::string theorem_id{"PCG-GENERAL-FIXED-TURN-INTERSECTION-THM-001"};
+    SourceDigest source_digest{
+        "SHA-256",
+        "625f91fac3d201f29b7a8a253b0e8fb3de5a8358f5eaeb2527ee8a85899ce208"
+    };
+    std::string closure_binding_digest;
+
+    NetworkClosureCertificate closure_certificate;
+    Decision decision{Decision::Indeterminate};
+    PositiveKernelPostClosureProof proof{PositiveKernelPostClosureProof::None};
+    ArithmeticAssurance assurance{ArithmeticAssurance::None};
+    TerminationReason termination{TerminationReason::BackendFailure};
+
+    std::size_t witness_a{std::numeric_limits<std::size_t>::max()};
+    std::size_t witness_b{std::numeric_limits<std::size_t>::max()};
+    std::size_t checked_pairs{};
+};
+
+struct PositiveKernelPostClosureResult {
+    explicit PositiveKernelPostClosureResult(
+        const PositiveKernelPostClosureCertificate& c) : certificate(c) {}
+
+    Decision decision{Decision::Indeterminate};
+    PositiveKernelPostClosureProof proof{PositiveKernelPostClosureProof::None};
+    ArithmeticAssurance assurance{ArithmeticAssurance::None};
+    TerminationReason termination{TerminationReason::BackendFailure};
+    PositiveKernelPostClosureCertificate certificate;
+};
+
+std::string serialize_positive_kernel_post_closure_certificate(
+    const PositiveKernelPostClosureCertificate& certificate);
+
+PositiveKernelPostClosureResult solve_positive_kernel_post_closure_witness(
+    const NetworkClosureCertificate& closure_certificate);
+
+PositiveKernelPostClosureResult verify_positive_kernel_post_closure_certificate(
+    const PositiveKernelPostClosureCertificate& certificate);
+
 std::string serialize_rigid_post_closure_certificate(
     const RigidPostClosureCertificate& certificate);
 
