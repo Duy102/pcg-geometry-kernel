@@ -1,62 +1,46 @@
 # PCG Geometry Kernel
 
-**Status: Phase 0 audit checkpoint. No production solver is implemented yet.**
+Theorem-traceable production engineering for Prime-Curve Geometry (PCG).
 
-This public repository holds the PCG audit package approved for publication.
-The immediate build target is a certified ABCABC vertical slice (Phases 0–3),
-with an independently checked certificate verifier.
+## Current scope
 
-## Audit package
+This repository is intentionally narrow. The current implementation target is the six-arc `ABCABC` fixed-turn vertical slice from Prompt v5. It does **not** claim a complete arbitrary-trace PCG solver.
 
-[Download PCG_Geometry_Kernel_Phase0_Audit.zip](PCG_Geometry_Kernel_Phase0_Audit.zip)
+The Phase 0 audit checkpoint remains preserved in `PCG_Geometry_Kernel_Phase0_Audit.zip`.
 
-Archive SHA-256:
+## Phase 0–3 candidate implementation
+
+The `phase0-3-abcabc` branch adds:
+
+- C++20/CMake kernel skeleton;
+- exact rational multiples of pi for theorem-facing turns;
+- separate `InputError`, `DomainError`, `Decision`, `ProofKind`, `ArithmeticAssurance`, and `TerminationReason` semantics;
+- Boost interval-based certification substrate with analytic transcendental checks;
+- generic supporting-circle / finite-arc relation code and PCG `ExtraHit`;
+- specialized `ABCABC` theorem solver;
+- exact phase / positive-closure obstruction path;
+- certified numerical cross-passage checks;
+- deterministic canonical input serialization + SHA-256 binding;
+- versioned certificate metadata and independent certificate re-verification;
+- versioned `ABCABC` golden conformance corpus;
+- GCC/Clang GitHub Actions CI.
+
+Local clean builds were verified with GCC and Clang before publication of the candidate branch. Remote GitHub CI remains the release gate for merging.
+
+## Scientific boundary
+
+The stable design invariants are:
 
 ```text
-2633531cc90a083073fcd4c21693d535086d275d27266e6ac9d16f53296a6880
+REALIZABLE     => verifiable existence evidence
+NOT_REALIZABLE => verifiable obstruction
+otherwise      => INDETERMINATE
 ```
 
-The archive contains 43 files under `pcg-geometry-kernel/`:
+No numerical search failure is treated as proof of nonexistence. Intermediate stages must not overstate their guarantees.
 
-- The supplied production charter and original source snapshots.
-- Draft product, numerical, degeneracy, canonicalization, provenance and TCB contracts.
-- A source inventory and 12 stable statement records with SHA-256 digests.
-- A blocker register, an audit report and the Phase 0–3 implementation plan.
-- Five source-witness candidates and a C++ backend readiness probe.
+## Historical Phase 0 audit
 
-Extract the archive, then start with `docs/audit-report.md` and
-`docs/blockers.md`. Source and statement hashes identify the exact source
-versions; they do not establish theorem truth.
+The original audit package is retained as a historical checkpoint. Its blocker statements describe the earlier environment and should not be read as the status of later implementation work.
 
-## Verified at this checkpoint
-
-- 23 source snapshots: byte digests and sizes checked.
-- 12 statement records: unique identifiers and statement digests checked.
-- ABCABC pair partition: exactly 15 = 3 + 6 + 6.
-- Five source-witness candidates: exact turn-range and phase-congruence checks only.
-
-No complete geometric witness, numerical certification, golden corpus, certificate
-verifier, production solver or GitHub Actions result is claimed.
-
-## Open blockers
-
-1. The original execution environment lacks the MPFR/GMP development files;
-   the readiness probe failed at missing `mpfr.h`.
-2. The precise executable interpretation of ABCABC genericity must be frozen.
-3. Global sharp-refinement source status differs across supplied manuscripts;
-   those claims are quarantined pending model/source reconciliation. This is
-   not a demonstrated counterexample to the separate fixed-turn ABCABC theorem.
-
-The implementation language selected is C++20; the intended numerical stack is
-GMP/MPFR with rigorously validated enclosures. The required backend is designed,
-not yet implemented and tested.
-
-## Publication record
-
-The public repository and this archive were published after the audit was
-packaged on 2026-10-06. The archive's statements that no repository had been
-created describe the earlier audit checkpoint; they are retained as historical
-records. Its mathematical and build blockers remain open.
-
-Public visibility does not grant a software or manuscript license.
-No license has been added.
+Public visibility does not itself grant a software or manuscript license. No license has been added yet.

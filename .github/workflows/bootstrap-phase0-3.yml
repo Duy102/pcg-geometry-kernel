@@ -1,0 +1,36 @@
+name: Bootstrap Phase 0-3 source
+
+on:
+  push:
+    branches:
+      - phase0-3-abcabc
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase0-3-abcabc
+      - name: Expand reviewed Phase 0-3 source
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/pcg-phase0-3
+          mkdir -p /tmp/pcg-phase0-3
+          unzip -q phase0-3-source.zip -d /tmp/pcg-phase0-3
+          rsync -a --exclude=README.md /tmp/pcg-phase0-3/pcg-geometry-kernel/ ./
+          sed -i 's#  /mnt/data/#  #' docs/source-digests.txt
+          rm -f phase0-3-source.zip
+          rm -f .github/workflows/bootstrap-phase0-3.yml
+      - name: Commit expanded source
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: publish certified ABCABC Phase 0-3 vertical slice"
+          git push origin HEAD:phase0-3-abcabc
