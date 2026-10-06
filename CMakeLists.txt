@@ -13,6 +13,7 @@ add_library(pcg STATIC
     src/network_closure.cpp
     src/post_closure.cpp
     src/semialgebraic.cpp
+    src/semialgebraic_polynomial.cpp
 )
 target_include_directories(pcg PUBLIC include)
 target_link_libraries(pcg PUBLIC OpenSSL::Crypto)
@@ -44,3 +45,7 @@ add_test(NAME pcg_post_closure_tests COMMAND pcg_post_closure_tests)
 add_executable(pcg_semialgebraic_tests tests/semialgebraic_test.cpp)
 target_link_libraries(pcg_semialgebraic_tests PRIVATE pcg)
 add_test(NAME pcg_semialgebraic_tests COMMAND pcg_semialgebraic_tests)
+
+add_executable(pcg_semialgebraic_polynomial_tests tests/semialgebraic_polynomial_test.cpp)
+target_link_libraries(pcg_semialgebraic_polynomial_tests PRIVATE pcg)
+add_test(NAME pcg_semialgebraic_polynomial_tests COMMAND pcg_semialgebraic_polynomial_tests)
