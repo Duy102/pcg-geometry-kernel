@@ -16,7 +16,7 @@ namespace {
 
 constexpr unsigned kMaxCyclotomicOrder = 256;
 const char* kSchema = "pcg-network-closure-certificate";
-const char* kSchemaVersion = "1.0";
+const char* kSchemaVersion = "1.1";
 const char* kTheoremId = "PCG-NETWORK-CLOSURE-THM-001";
 const char* kSourceDigest = "6d1f8fc39b3bb34385956c4d2c0e77e222260f60d2f59fde860d6c1964aa8546";
 
@@ -512,25 +512,6 @@ RrefResult rref(const CyclotomicField& field,
     return {std::move(a),std::move(pivots)};
 }
 
-std::vector<Alg> rigid_kernel_from_rref(const CyclotomicField& field,
-                                        const RrefResult& rr,
-                                        std::size_t cols) {
-    std::vector<bool> pivot(cols,false);
-    for (auto c : rr.pivot_cols) pivot[c]=true;
-    std::size_t free_col=cols;
-    for (std::size_t c=0;c<cols;++c)
-        if (!pivot[c]) { free_col=c; break; }
-    if (free_col==cols) throw std::runtime_error("no free column in rigid kernel");
-
-    std::vector<Alg> x(cols,field.zero());
-    x[free_col]=field.one();
-    for (std::size_t r=0;r<rr.pivot_cols.size();++r) {
-        const std::size_t pc=rr.pivot_cols[r];
-        x[pc]=field.neg(rr.r[r][free_col]);
-    }
-    return x;
-}
-
 bool matrix_times_vector_zero(const CyclotomicField& field,
                               const std::vector<std::vector<Alg>>& a,
                               const std::vector<Alg>& x) {
@@ -562,23 +543,285 @@ std::vector<Alg> decode_vector(const CyclotomicField& field,
     return out;
 }
 
-struct SignSummary {
-    bool indeterminate{false};
-    bool has_zero{false};
-    bool has_pos{false};
-    bool has_neg{false};
+enum class FeasibilityStatus { Feasible, Infeasible, Indeterminate };
+
+struct FeasibilityResult {
+    FeasibilityStatus status{FeasibilityStatus::Indeterminate};
+    std::vector<Alg> variables;
 };
 
-SignSummary summarize_signs(const CyclotomicField& field,const std::vector<Alg>& x) {
-    SignSummary s;
-    for (const auto& a : x) {
-        const auto sign=certified_real_sign(field,a);
-        if (sign==SignCert::Indeterminate) s.indeterminate=true;
-        if (sign==SignCert::Zero) s.has_zero=true;
-        if (sign==SignCert::Positive) s.has_pos=true;
-        if (sign==SignCert::Negative) s.has_neg=true;
+FeasibilityResult nonnegative_equality_feasibility(
+        const CyclotomicField& field,
+        const std::vector<std::vector<Alg>>& input_a,
+        const std::vector<Alg>& input_b,
+        std::size_t variable_count) {
+    if (input_a.size()!=input_b.size())
+        throw std::invalid_argument("equality system row/rhs mismatch");
+    for (const auto& row : input_a)
+        if (row.size()!=variable_count)
+            throw std::invalid_argument("equality system column mismatch");
+
+    std::vector<std::vector<Alg>> a;
+    std::vector<Alg> rhs;
+    a.reserve(input_a.size());
+    rhs.reserve(input_b.size());
+
+    for (std::size_t i=0;i<input_a.size();++i) {
+        bool row_zero=true;
+        for (const auto& x : input_a[i])
+            if (!field.is_zero(x)) { row_zero=false; break; }
+
+        if (row_zero) {
+            if (!field.is_zero(input_b[i]))
+                return {FeasibilityStatus::Infeasible,{}};
+            continue;
+        }
+
+        auto row=input_a[i];
+        Alg b=input_b[i];
+        const auto sign=certified_real_sign(field,b);
+        if (sign==SignCert::Indeterminate)
+            return {FeasibilityStatus::Indeterminate,{}};
+        if (sign==SignCert::Negative) {
+            for (auto& x : row) x=field.neg(x);
+            b=field.neg(b);
+        }
+        a.push_back(std::move(row));
+        rhs.push_back(std::move(b));
     }
-    return s;
+
+    const std::size_t rows=a.size();
+    if (rows==0)
+        return {FeasibilityStatus::Feasible,
+                std::vector<Alg>(variable_count,field.zero())};
+
+    const std::size_t total_vars=variable_count+rows;
+    std::vector<std::vector<Alg>> tab(
+        rows,std::vector<Alg>(total_vars,field.zero()));
+    std::vector<std::size_t> basis(rows);
+
+    for (std::size_t i=0;i<rows;++i) {
+        for (std::size_t j=0;j<variable_count;++j)
+            tab[i][j]=a[i][j];
+        tab[i][variable_count+i]=field.one();
+        basis[i]=variable_count+i;
+    }
+
+    auto cost_is_one=[&](std::size_t var) {
+        return var>=variable_count;
+    };
+
+    const std::size_t iteration_limit=100000;
+    for (std::size_t iteration=0;iteration<iteration_limit;++iteration) {
+        std::vector<bool> is_basic(total_vars,false);
+        for (auto b : basis) is_basic[b]=true;
+
+        std::size_t enter=total_vars;
+        for (std::size_t j=0;j<total_vars;++j) {
+            if (is_basic[j]) continue;
+
+            Alg reduced=cost_is_one(j)?field.one():field.zero();
+            for (std::size_t i=0;i<rows;++i) {
+                if (cost_is_one(basis[i]))
+                    reduced=field.sub(reduced,tab[i][j]);
+            }
+
+            const auto sign=certified_real_sign(field,reduced);
+            if (sign==SignCert::Indeterminate)
+                return {FeasibilityStatus::Indeterminate,{}};
+            if (sign==SignCert::Negative) {
+                enter=j; // Bland: first eligible index.
+                break;
+            }
+        }
+
+        if (enter==total_vars) {
+            Alg objective=field.zero();
+            for (std::size_t i=0;i<rows;++i)
+                if (cost_is_one(basis[i]))
+                    objective=field.add(objective,rhs[i]);
+
+            if (field.is_zero(objective)) {
+                std::vector<Alg> x(variable_count,field.zero());
+                for (std::size_t i=0;i<rows;++i)
+                    if (basis[i]<variable_count)
+                        x[basis[i]]=rhs[i];
+
+                for (const auto& v : x) {
+                    const auto sign=certified_real_sign(field,v);
+                    if (sign==SignCert::Negative)
+                        return {FeasibilityStatus::Indeterminate,{}};
+                    if (sign==SignCert::Indeterminate)
+                        return {FeasibilityStatus::Indeterminate,{}};
+                }
+                return {FeasibilityStatus::Feasible,std::move(x)};
+            }
+
+            const auto sign=certified_real_sign(field,objective);
+            if (sign==SignCert::Positive)
+                return {FeasibilityStatus::Infeasible,{}};
+            return {FeasibilityStatus::Indeterminate,{}};
+        }
+
+        std::size_t leave=rows;
+        Alg best_ratio=field.zero();
+        bool have_ratio=false;
+        for (std::size_t i=0;i<rows;++i) {
+            const auto coeff_sign=certified_real_sign(field,tab[i][enter]);
+            if (coeff_sign==SignCert::Indeterminate)
+                return {FeasibilityStatus::Indeterminate,{}};
+            if (coeff_sign!=SignCert::Positive) continue;
+
+            const Alg ratio=field.divide(rhs[i],tab[i][enter]);
+            if (!have_ratio) {
+                leave=i;
+                best_ratio=ratio;
+                have_ratio=true;
+                continue;
+            }
+
+            const auto cmp=certified_real_sign(field,field.sub(ratio,best_ratio));
+            if (cmp==SignCert::Indeterminate)
+                return {FeasibilityStatus::Indeterminate,{}};
+            if (cmp==SignCert::Negative ||
+                (cmp==SignCert::Zero && basis[i]<basis[leave])) {
+                leave=i;
+                best_ratio=ratio;
+            }
+        }
+
+        if (!have_ratio)
+            return {FeasibilityStatus::Indeterminate,{}};
+
+        const Alg pivot=tab[leave][enter];
+        const Alg inv=field.inverse(pivot);
+        for (std::size_t j=0;j<total_vars;++j)
+            tab[leave][j]=field.mul(tab[leave][j],inv);
+        rhs[leave]=field.mul(rhs[leave],inv);
+
+        for (std::size_t i=0;i<rows;++i) {
+            if (i==leave || field.is_zero(tab[i][enter])) continue;
+            const Alg factor=tab[i][enter];
+            for (std::size_t j=0;j<total_vars;++j)
+                tab[i][j]=field.sub(tab[i][j],field.mul(factor,tab[leave][j]));
+            rhs[i]=field.sub(rhs[i],field.mul(factor,rhs[leave]));
+        }
+        basis[leave]=enter;
+    }
+
+    return {FeasibilityStatus::Indeterminate,{}};
+}
+
+FeasibilityResult find_positive_kernel(const CyclotomicField& field,
+                                       const std::vector<std::vector<Alg>>& matrix,
+                                       std::size_t columns) {
+    std::vector<Alg> rhs(matrix.size(),field.zero());
+    for (std::size_t i=0;i<matrix.size();++i) {
+        Alg row_sum=field.zero();
+        for (std::size_t j=0;j<columns;++j)
+            row_sum=field.add(row_sum,matrix[i][j]);
+        rhs[i]=field.neg(row_sum);
+    }
+
+    auto phase=nonnegative_equality_feasibility(field,matrix,rhs,columns);
+    if (phase.status!=FeasibilityStatus::Feasible)
+        return phase;
+
+    for (auto& x : phase.variables)
+        x=field.add(x,field.one()); // c = 1 + z, hence c is strictly positive.
+    return phase;
+}
+
+FeasibilityResult find_stiemke_dual(const CyclotomicField& field,
+                                    const std::vector<std::vector<Alg>>& matrix,
+                                    std::size_t columns) {
+    const std::size_t rows=matrix.size();
+    const std::size_t vars=2*rows+columns;
+    std::vector<std::vector<Alg>> a(
+        columns+1,std::vector<Alg>(vars,field.zero()));
+    std::vector<Alg> b(columns+1,field.zero());
+
+    // z = N^T(y+ - y-) >= 0.
+    for (std::size_t e=0;e<columns;++e) {
+        for (std::size_t i=0;i<rows;++i) {
+            a[e][i]=field.neg(matrix[i][e]);
+            a[e][rows+i]=matrix[i][e];
+        }
+        a[e][2*rows+e]=field.one();
+    }
+
+    // Normalize the nonzero nonnegative stress: sum(z)=1.
+    for (std::size_t e=0;e<columns;++e)
+        a[columns][2*rows+e]=field.one();
+    b[columns]=field.one();
+
+    auto phase=nonnegative_equality_feasibility(field,a,b,vars);
+    if (phase.status!=FeasibilityStatus::Feasible)
+        return phase;
+
+    std::vector<Alg> y(rows,field.zero());
+    for (std::size_t i=0;i<rows;++i)
+        y[i]=field.sub(phase.variables[i],phase.variables[rows+i]);
+    return {FeasibilityStatus::Feasible,std::move(y)};
+}
+
+bool positive_kernel_valid(const CyclotomicField& field,
+                           const std::vector<std::vector<Alg>>& matrix,
+                           const std::vector<Alg>& c,
+                           bool* comparison_indeterminate=nullptr) {
+    if (comparison_indeterminate) *comparison_indeterminate=false;
+    if (matrix.empty()) {
+        for (const auto& x : c) {
+            const auto sign=certified_real_sign(field,x);
+            if (sign==SignCert::Indeterminate) {
+                if (comparison_indeterminate) *comparison_indeterminate=true;
+                return false;
+            }
+            if (sign!=SignCert::Positive) return false;
+        }
+        return true;
+    }
+    if (matrix[0].size()!=c.size()) return false;
+    if (!matrix_times_vector_zero(field,matrix,c)) return false;
+
+    for (const auto& x : c) {
+        const auto sign=certified_real_sign(field,x);
+        if (sign==SignCert::Indeterminate) {
+            if (comparison_indeterminate) *comparison_indeterminate=true;
+            return false;
+        }
+        if (sign!=SignCert::Positive) return false;
+    }
+    return true;
+}
+
+bool stiemke_dual_valid(const CyclotomicField& field,
+                        const std::vector<std::vector<Alg>>& matrix,
+                        const std::vector<Alg>& y,
+                        bool* comparison_indeterminate=nullptr) {
+    if (comparison_indeterminate) *comparison_indeterminate=false;
+    const std::size_t rows=matrix.size();
+    const std::size_t cols=rows?matrix[0].size():0;
+    if (y.size()!=rows || cols==0) return false;
+
+    for (const auto& v : y)
+        if (!field.is_real(v)) return false;
+
+    bool positive=false;
+    for (std::size_t e=0;e<cols;++e) {
+        Alg z=field.zero();
+        for (std::size_t i=0;i<rows;++i)
+            z=field.add(z,field.mul(matrix[i][e],y[i]));
+
+        const auto sign=certified_real_sign(field,z);
+        if (sign==SignCert::Indeterminate) {
+            if (comparison_indeterminate) *comparison_indeterminate=true;
+            return false;
+        }
+        if (sign==SignCert::Negative) return false;
+        if (sign==SignCert::Positive) positive=true;
+    }
+    return positive;
 }
 
 NetworkClosureCertificate base_certificate(const NetworkClosureInput& input) {
@@ -593,14 +836,13 @@ NetworkClosureResult result_from_certificate(const NetworkClosureCertificate& ce
     out.proof=cert.proof;
     if (cert.proof==NetworkClosureProof::ExactFullRankObstruction)
         out.assurance=ArithmeticAssurance::Exact;
-    else if (cert.proof==NetworkClosureProof::CertifiedPositiveRigidKernel ||
-             cert.proof==NetworkClosureProof::CertifiedRigidSignObstruction)
+    else if (cert.proof==NetworkClosureProof::CertifiedPositiveKernel ||
+             cert.proof==NetworkClosureProof::CertifiedStiemkeObstruction)
         out.assurance=ArithmeticAssurance::CertifiedNumerical;
     else
         out.assurance=ArithmeticAssurance::None;
     out.termination=cert.status==NetworkClosureStatus::Indeterminate
         ? (cert.proof==NetworkClosureProof::CyclotomicOrderLimit ||
-           cert.proof==NetworkClosureProof::HigherDimensionalKernel ||
            cert.proof==NetworkClosureProof::SignCertificationLimit
               ? TerminationReason::PrecisionLimit
               : TerminationReason::BackendFailure)
@@ -649,6 +891,21 @@ std::string canonicalize_network_closure_input(const NetworkClosureInput& input)
 }
 
 std::string serialize_network_closure_certificate(const NetworkClosureCertificate& c) {
+    auto emit_vector=[&](std::ostringstream& os,
+                         const std::vector<AlgebraicChordValue>& values) {
+        os << "[";
+        for (std::size_t i=0;i<values.size();++i) {
+            if (i) os << ",";
+            os << "[";
+            for (std::size_t j=0;j<values[i].coefficients.size();++j) {
+                if (j) os << ",";
+                os << "\"" << rational_text(values[i].coefficients[j]) << "\"";
+            }
+            os << "]";
+        }
+        os << "]";
+    };
+
     std::ostringstream os;
     os << "{\"schema\":\"" << c.schema
        << "\",\"schema_version\":\"" << c.schema_version
@@ -659,17 +916,11 @@ std::string serialize_network_closure_certificate(const NetworkClosureCertificat
        << ",\"proof\":" << static_cast<int>(c.proof)
        << ",\"cyclotomic_order\":" << c.cyclotomic_order
        << ",\"exact_rank\":" << c.exact_rank
-       << ",\"kernel\":[";
-    for (std::size_t i=0;i<c.rigid_kernel.size();++i) {
-        if (i) os << ",";
-        os << "[";
-        for (std::size_t j=0;j<c.rigid_kernel[i].coefficients.size();++j) {
-            if (j) os << ",";
-            os << "\"" << rational_text(c.rigid_kernel[i].coefficients[j]) << "\"";
-        }
-        os << "]";
-    }
-    os << "]}";
+       << ",\"positive_kernel\":";
+    emit_vector(os,c.positive_kernel);
+    os << ",\"stiemke_dual\":";
+    emit_vector(os,c.stiemke_dual);
+    os << "}";
     return os.str();
 }
 
@@ -693,34 +944,48 @@ NetworkClosureResult solve_network_closure(const NetworkClosureInput& input) {
         if (cert.exact_rank==m) {
             cert.status=NetworkClosureStatus::NotClosed;
             cert.proof=NetworkClosureProof::ExactFullRankObstruction;
-        } else if (m-cert.exact_rank==1) {
-            auto kernel=rigid_kernel_from_rref(sys.field,rr,m);
-            if (!matrix_times_vector_zero(sys.field,sys.matrix,kernel))
-                return invalid_certificate(cert);
-
-            const auto signs=summarize_signs(sys.field,kernel);
-            if (signs.indeterminate) {
+        } else {
+            auto positive=find_positive_kernel(sys.field,sys.matrix,m);
+            if (positive.status==FeasibilityStatus::Indeterminate) {
                 cert.status=NetworkClosureStatus::Indeterminate;
                 cert.proof=NetworkClosureProof::SignCertificationLimit;
-                cert.rigid_kernel=encode_vector(kernel);
                 return result_from_certificate(cert);
             }
 
-            if (!signs.has_zero && !(signs.has_pos && signs.has_neg)) {
-                if (signs.has_neg) {
-                    for (auto& x : kernel) x=sys.field.neg(x);
+            if (positive.status==FeasibilityStatus::Feasible) {
+                bool sign_limit=false;
+                if (!positive_kernel_valid(sys.field,sys.matrix,positive.variables,&sign_limit)) {
+                    cert.status=NetworkClosureStatus::Indeterminate;
+                    cert.proof=sign_limit
+                        ? NetworkClosureProof::SignCertificationLimit
+                        : NetworkClosureProof::BackendFailure;
+                    return result_from_certificate(cert);
                 }
                 cert.status=NetworkClosureStatus::Closed;
-                cert.proof=NetworkClosureProof::CertifiedPositiveRigidKernel;
-                cert.rigid_kernel=encode_vector(kernel);
+                cert.proof=NetworkClosureProof::CertifiedPositiveKernel;
+                cert.positive_kernel=encode_vector(positive.variables);
             } else {
+                auto dual=find_stiemke_dual(sys.field,sys.matrix,m);
+                if (dual.status!=FeasibilityStatus::Feasible) {
+                    cert.status=NetworkClosureStatus::Indeterminate;
+                    cert.proof=dual.status==FeasibilityStatus::Indeterminate
+                        ? NetworkClosureProof::SignCertificationLimit
+                        : NetworkClosureProof::BackendFailure;
+                    return result_from_certificate(cert);
+                }
+
+                bool sign_limit=false;
+                if (!stiemke_dual_valid(sys.field,sys.matrix,dual.variables,&sign_limit)) {
+                    cert.status=NetworkClosureStatus::Indeterminate;
+                    cert.proof=sign_limit
+                        ? NetworkClosureProof::SignCertificationLimit
+                        : NetworkClosureProof::BackendFailure;
+                    return result_from_certificate(cert);
+                }
                 cert.status=NetworkClosureStatus::NotClosed;
-                cert.proof=NetworkClosureProof::CertifiedRigidSignObstruction;
-                cert.rigid_kernel=encode_vector(kernel);
+                cert.proof=NetworkClosureProof::CertifiedStiemkeObstruction;
+                cert.stiemke_dual=encode_vector(dual.variables);
             }
-        } else {
-            cert.status=NetworkClosureStatus::Indeterminate;
-            cert.proof=NetworkClosureProof::HigherDimensionalKernel;
         }
 
         auto checked=verify_network_closure_certificate(cert);
@@ -743,7 +1008,8 @@ NetworkClosureResult verify_network_closure_certificate(const NetworkClosureCert
                 cert.proof==NetworkClosureProof::CyclotomicOrderLimit &&
                 cert.cyclotomic_order==0 &&
                 cert.exact_rank==0 &&
-                cert.rigid_kernel.empty())
+                cert.positive_kernel.empty() &&
+                cert.stiemke_dual.empty())
                 return result_from_certificate(cert);
             return invalid_certificate(cert);
         }
@@ -756,48 +1022,43 @@ NetworkClosureResult verify_network_closure_certificate(const NetworkClosureCert
 
         if (cert.status==NetworkClosureStatus::NotClosed &&
             cert.proof==NetworkClosureProof::ExactFullRankObstruction) {
-            if (rank!=m || !cert.rigid_kernel.empty()) return invalid_certificate(cert);
+            if (rank!=m ||
+                !cert.positive_kernel.empty() ||
+                !cert.stiemke_dual.empty())
+                return invalid_certificate(cert);
             return result_from_certificate(cert);
         }
 
-        if (rank>=m || m-rank!=1) {
-            if (cert.status==NetworkClosureStatus::Indeterminate &&
-                cert.proof==NetworkClosureProof::HigherDimensionalKernel &&
-                rank<m && m-rank>1 &&
-                cert.rigid_kernel.empty())
-                return result_from_certificate(cert);
-            return invalid_certificate(cert);
-        }
-
-        if (cert.rigid_kernel.size()!=m) return invalid_certificate(cert);
-        const auto kernel=decode_vector(sys.field,cert.rigid_kernel);
-        if (!matrix_times_vector_zero(sys.field,sys.matrix,kernel))
-            return invalid_certificate(cert);
-
-        bool nonzero=false;
-        for (const auto& x : kernel) if (!sys.field.is_zero(x)) nonzero=true;
-        if (!nonzero) return invalid_certificate(cert);
-
-        const auto signs=summarize_signs(sys.field,kernel);
-
         if (cert.status==NetworkClosureStatus::Closed &&
-            cert.proof==NetworkClosureProof::CertifiedPositiveRigidKernel) {
-            if (signs.indeterminate || signs.has_zero || signs.has_neg || !signs.has_pos)
+            cert.proof==NetworkClosureProof::CertifiedPositiveKernel) {
+            if (rank>=m || cert.positive_kernel.size()!=m ||
+                !cert.stiemke_dual.empty())
+                return invalid_certificate(cert);
+            const auto c=decode_vector(sys.field,cert.positive_kernel);
+            bool sign_limit=false;
+            if (!positive_kernel_valid(sys.field,sys.matrix,c,&sign_limit))
                 return invalid_certificate(cert);
             return result_from_certificate(cert);
         }
 
         if (cert.status==NetworkClosureStatus::NotClosed &&
-            cert.proof==NetworkClosureProof::CertifiedRigidSignObstruction) {
-            if (signs.indeterminate) return invalid_certificate(cert);
-            if (!(signs.has_zero || (signs.has_pos && signs.has_neg)))
+            cert.proof==NetworkClosureProof::CertifiedStiemkeObstruction) {
+            if (rank>=m || !cert.positive_kernel.empty() ||
+                cert.stiemke_dual.size()!=sys.matrix.size())
+                return invalid_certificate(cert);
+            const auto y=decode_vector(sys.field,cert.stiemke_dual);
+            bool sign_limit=false;
+            if (!stiemke_dual_valid(sys.field,sys.matrix,y,&sign_limit))
                 return invalid_certificate(cert);
             return result_from_certificate(cert);
         }
 
         if (cert.status==NetworkClosureStatus::Indeterminate &&
             cert.proof==NetworkClosureProof::SignCertificationLimit) {
-            if (!signs.indeterminate) return invalid_certificate(cert);
+            if (rank>=m ||
+                !cert.positive_kernel.empty() ||
+                !cert.stiemke_dual.empty())
+                return invalid_certificate(cert);
             return result_from_certificate(cert);
         }
 
