@@ -127,13 +127,14 @@ VEval verify_evaluate(const ABCABCInput& in) {
         const auto in_y=shared_start_arc_contains_second(
             y,delta,inter.qx,inter.qy);
 
+        if (in_x==CertifiedTruth::False || in_y==CertifiedTruth::False)
+            continue;
+
         if (in_x==CertifiedTruth::True && in_y==CertifiedTruth::True)
             return {Decision::NotRealizable,ProofKind::FinitePredicateCertificate,
                     ArithmeticAssurance::CertifiedNumerical,ABCABCProofReason::ExtraHitObstruction};
 
-        if (in_x==CertifiedTruth::Indeterminate ||
-            in_y==CertifiedTruth::Indeterminate)
-            indeterminate=true;
+        indeterminate=true;
     }
 
     if (indeterminate)

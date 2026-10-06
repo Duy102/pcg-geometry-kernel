@@ -133,8 +133,7 @@ std::array<ArcPair,6> cross_passage_pairs(const std::array<PiRational,6>& p,
     }};
 }
 
-CertifiedTruth non_antipodal_second_for_arc(const SharedStartArc& arc,
-                                             PiRational relative_phase,
+CertifiedTruth non_antipodal_second_for_arc(PiRational relative_phase,
                                              const SharedStartIntersection& inter) {
     const auto s = certified_sin_pi(relative_phase).interval();
     const auto c = certified_cos_pi(relative_phase).interval();
@@ -190,8 +189,8 @@ ABCABCGenericityStatus genericity_from_precomputed(const std::array<PiRational,6
             continue;
         }
         const PiRational delta = y.tangent_phase_pi - x.tangent_phase_pi;
-        const auto na = non_antipodal_second_for_arc(x,PiRational{0,1},inter);
-        const auto nb = non_antipodal_second_for_arc(y,delta,inter);
+        const auto na = non_antipodal_second_for_arc(PiRational{0,1},inter);
+        const auto nb = non_antipodal_second_for_arc(delta,inter);
         if (na == CertifiedTruth::False || nb == CertifiedTruth::False)
             return ABCABCGenericityStatus::Violated;
         if (na == CertifiedTruth::Indeterminate || nb == CertifiedTruth::Indeterminate)
