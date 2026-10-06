@@ -137,6 +137,10 @@ int main() {
           sqpost.proof==RigidPostClosureProof::HigherDimensionalClosure,
           "Phase 6A does not overclaim higher-dimensional length selection");
 
+    auto sqwitness=solve_positive_kernel_post_closure_witness(sq.certificate);
+    check(sqwitness.decision!=Decision::NotRealizable,
+          "one higher-dimensional metric witness can never certify global non-realizability");
+
     // Upstream nonclosure propagates as a realizability obstruction.
     NetworkClosureInput open_tri{
         3,{0,1,2},
@@ -149,6 +153,10 @@ int main() {
     check(open_post.decision==Decision::NotRealizable &&
           open_post.proof==RigidPostClosureProof::NetworkClosureObstruction,
           "Network Closure obstruction propagates through Phase 6A");
+    auto open_witness=solve_positive_kernel_post_closure_witness(open.certificate);
+    check(open_witness.decision==Decision::NotRealizable &&
+          open_witness.proof==PositiveKernelPostClosureProof::NetworkClosureObstruction,
+          "global Network Closure obstruction propagates through Phase 6B1");
 
     auto tampered=post.certificate;
     tampered.source_digest.value=std::string(64,'0');
