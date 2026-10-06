@@ -85,7 +85,42 @@ int main() {
           Decision::Realizable,
           "post-closure certificate verifies");
 
-    // Higher-dimensional Network Closure is intentionally left for Phase 6B.
+    // Phase 6B1: a higher-dimensional positive-kernel witness may itself be
+    // enough to certify existence, even though it is not a complete search of
+    // the positive closure polytope.
+    NetworkClosureInput convex_quad{
+        4,{0,1,2,3},
+        {
+            Turn{PiRational{1,3}},Turn{PiRational{1,2}},
+            Turn{PiRational{1,4}},Turn{PiRational{11,12}}
+        }
+    };
+    auto cq=solve_network_closure(convex_quad);
+    check(cq.status==NetworkClosureStatus::Closed &&
+          convex_quad.turns.size()-cq.certificate.exact_rank==2,
+          "generic convex quadrilateral has two-dimensional positive closure");
+    auto cqemb=reconstruct_positive_kernel_embedding(cq.certificate);
+    check(cqemb.status==ProjectivelyRigidEmbeddingStatus::Ready,
+          "higher-dimensional positive-kernel witness reconstructs exactly");
+    auto cqpost=solve_positive_kernel_post_closure_witness(cq.certificate);
+    check(cqpost.decision==Decision::Realizable &&
+          cqpost.proof==PositiveKernelPostClosureProof::TraceFaithfulMetricWitness,
+          "higher-dimensional positive-kernel witness certifies realizability");
+    check(cqpost.certificate.checked_pairs==6,
+          "four finite arcs check all six unordered pairs");
+    check(verify_positive_kernel_post_closure_certificate(cqpost.certificate).decision==
+          Decision::Realizable,
+          "higher-dimensional witness certificate verifies");
+
+    auto cqbad=cqpost.certificate;
+    cqbad.source_digest.value=std::string(64,'0');
+    check(verify_positive_kernel_post_closure_certificate(cqbad).termination==
+          TerminationReason::BackendFailure,
+          "higher-dimensional witness verifier rejects theorem-source tampering");
+
+    // Phase 6A still deliberately rejects higher-dimensional closure because
+    // its NOT_REALIZABLE conclusions rely on uniqueness of the normalized
+    // metric skeleton.
     NetworkClosureInput square{
         4,{0,1,2,3},
         {
@@ -102,6 +137,10 @@ int main() {
           sqpost.proof==RigidPostClosureProof::HigherDimensionalClosure,
           "Phase 6A does not overclaim higher-dimensional length selection");
 
+    auto sqwitness=solve_positive_kernel_post_closure_witness(sq.certificate);
+    check(sqwitness.decision!=Decision::NotRealizable,
+          "one higher-dimensional metric witness can never certify global non-realizability");
+
     // Upstream nonclosure propagates as a realizability obstruction.
     NetworkClosureInput open_tri{
         3,{0,1,2},
@@ -114,6 +153,10 @@ int main() {
     check(open_post.decision==Decision::NotRealizable &&
           open_post.proof==RigidPostClosureProof::NetworkClosureObstruction,
           "Network Closure obstruction propagates through Phase 6A");
+    auto open_witness=solve_positive_kernel_post_closure_witness(open.certificate);
+    check(open_witness.decision==Decision::NotRealizable &&
+          open_witness.proof==PositiveKernelPostClosureProof::NetworkClosureObstruction,
+          "global Network Closure obstruction propagates through Phase 6B1");
 
     auto tampered=post.certificate;
     tampered.source_digest.value=std::string(64,'0');
@@ -126,6 +169,6 @@ int main() {
         std::cerr << failures << " post-closure test(s) failed\n";
         return 1;
     }
-    std::cout << "Projectively-rigid post-closure tests passed\n";
+    std::cout << "Post-closure geometry tests passed\n";
     return 0;
 }

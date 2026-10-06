@@ -108,6 +108,11 @@ std::string serialize_network_closure_certificate(const NetworkClosureCertificat
 NetworkClosureResult solve_network_closure(const NetworkClosureInput& input);
 NetworkClosureResult verify_network_closure_certificate(const NetworkClosureCertificate& certificate);
 
+// Reconstruct the normalized metric skeleton encoded by any certified
+// positive-kernel witness, including higher-dimensional closure spaces.
+ProjectivelyRigidEmbeddingResult reconstruct_positive_kernel_embedding(
+    const NetworkClosureCertificate& certificate);
+
 ProjectivelyRigidEmbeddingResult reconstruct_projectively_rigid_embedding(
     const NetworkClosureCertificate& certificate);
 

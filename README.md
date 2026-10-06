@@ -4,7 +4,7 @@ Theorem-traceable production engineering for Prime-Curve Geometry (PCG).
 
 ## Current status
 
-The repository currently contains a **hardened certified ABCABC vertical slice**, an exact **Seifert turn-flow** layer, a **general certified Network Closure** module, and a **Phase 6A projectively-rigid post-closure geometry** verifier.
+The repository currently contains a **hardened certified ABCABC vertical slice**, an exact **Seifert turn-flow** layer, a **general certified Network Closure** module, a **Phase 6A projectively-rigid post-closure geometry** verifier, and a **Phase 6B1 higher-dimensional positive-kernel witness** path.
 
 It is intentionally narrow: this is **not** a claim that arbitrary-trace PCG or the full PCG framework is production-complete.
 
@@ -95,6 +95,18 @@ Remote pairs use a general certified finite-arc `Hit` predicate. One-endpoint pa
 
 Tangency, coincident-support, or interval boundaries that cannot be certified return `INDETERMINATE`. Higher-dimensional post-closure length selection is deliberately left for a later phase because the trace-faithful subset of the positive closure polytope can be nonconvex.
 
+## Phase 6B1 higher-dimensional positive-kernel witnesses
+
+For `dim ker N > 1`, Phase 5B already provides one exact algebraic positive-kernel witness. Phase 6B1 can now reconstruct that specific normalized metric skeleton and run the same complete finite-arc pair verifier used by Phase 6A.
+
+The logic is deliberately asymmetric:
+
+- if the supplied positive-kernel metric passes every trace-faithfulness check, it is a verifiable **REALIZABLE** existence certificate;
+- if that metric has a vertex collision or unintended intersection, the result is only **INDETERMINATE** for the global problem, because another positive kernel vector may still work;
+- an upstream Stiemke / full-rank Network Closure obstruction remains a global **NOT_REALIZABLE** certificate.
+
+This implements a sound higher-dimensional existence path without pretending that one sampled point solves the theorem's generally nonconvex length-selection problem. Full logical completeness for higher-dimensional fixed-turn traces still requires a finite semialgebraic decision backend, e.g. real quantifier elimination / CAD, or a mathematically equivalent specialized solver.
+
 ## CI / Trusted Computing Base gates
 
 The current CI baseline uses:
@@ -120,7 +132,7 @@ This improves reproducibility but is not a fully hermetic build: the GitHub Ubun
 
 The current repository does not yet provide:
 
-- a complete higher-dimensional post-closure length-selection solver for arbitrary fixed-turn traces;
+- a complete higher-dimensional post-closure length-selection solver (real quantifier elimination / equivalent exact semialgebraic backend) for arbitrary fixed-turn traces;
 - production `ABCADCBD` specialization;
 - global BVH / spatial-index acceleration for large remote-pair workloads;
 - variable-turn / sign-rotation general decision machinery;
