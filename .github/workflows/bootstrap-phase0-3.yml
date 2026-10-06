@@ -28,10 +28,9 @@ jobs:
           rm -rf /tmp/pcg-phase0-3
           mkdir -p /tmp/pcg-phase0-3
           unzip -q /tmp/pcg-phase0-3.zip -d /tmp/pcg-phase0-3
-          rsync -a --exclude=README.md /tmp/pcg-phase0-3/pcg-geometry-kernel/ ./
+          rsync -a --exclude=README.md --exclude=.github/ /tmp/pcg-phase0-3/pcg-geometry-kernel/ ./
           sed -i 's#  /mnt/data/#  #' docs/source-digests.txt
           rm -f phase0-3-source.b64.*
-          rm -f .github/workflows/bootstrap-phase0-3.yml
       - name: Commit expanded source
         run: |
           set -euo pipefail
