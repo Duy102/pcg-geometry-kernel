@@ -22,3 +22,11 @@ The production ABCABC certificate verifier is compiled from a separate translati
 The merge-gate workflow is pinned to `ubuntu-24.04`, Boost headers package `libboost1.83-dev=1.83.0-2.1ubuntu3.2`, compiler majors GCC 13 / Clang 18, and an immutable `actions/checkout` commit SHA. Every matrix run prints a toolchain manifest containing compiler, CMake, Boost package, OpenSSL, and glibc versions. Both Debug and Release are tested on GCC and Clang. A separate GCC Debug job runs AddressSanitizer plus UndefinedBehaviorSanitizer (ASan/UBSan).
 
 This materially reduces CI drift but is not a claim of bit-for-bit hermetic builds: GitHub's `ubuntu-24.04` runner image and Ubuntu package repository can still evolve. A container-by-digest or archived package snapshot would be the next step if full hermetic reproducibility becomes a release requirement.
+
+## Phase 5A algebraic Network Closure TCB
+
+Phase 5A adds exact cyclotomic-field arithmetic implemented over Boost.Rational / Boost.Multiprecision integers. Cyclotomic polynomial construction, polynomial extended Euclidean inversion, Gaussian elimination, rank, nullity, and kernel equations are exact within that arithmetic model.
+
+The final sign of a nonzero real algebraic kernel component is currently certified by evaluating its real part through the existing directed-rounding interval trigonometric TCB. Exact cyclotomic conjugation first proves that the stored algebraic value is real. An interval that does not separate zero yields `INDETERMINATE`; it is never rounded into a sign decision.
+
+Accordingly, full-rank Network Closure obstruction is `EXACT`, while rigid positive/sign conclusions are `CERTIFIED_NUMERICAL`.
