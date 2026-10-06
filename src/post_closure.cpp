@@ -319,6 +319,7 @@ RigidPostClosureCertificate evaluate(const NetworkClosureCertificate& closure) {
     cert.witness_a=kNoIndex;
     cert.witness_b=kNoIndex;
     return cert;
+}
 
 PositiveKernelPostClosureCertificate base_positive_kernel_certificate(
     const NetworkClosureCertificate& c) {
@@ -546,7 +547,6 @@ PositiveKernelPostClosureCertificate evaluate_positive_kernel_witness(
     cert.witness_a=kNoIndex;
     cert.witness_b=kNoIndex;
     return cert;
-}
 }
 
 } // namespace
