@@ -868,6 +868,36 @@ bool metadata_ok(const NetworkClosureCertificate& c) {
            c.canonical_input_digest==sha256_hex(canonicalize_network_closure_input(c.input));
 }
 
+std::pair<Alg,Alg> exact_unit_direction(const CyclotomicField& field,
+                                        PiRational phase) {
+    if (field.order%4U!=0U)
+        throw std::runtime_error("cyclotomic order is incompatible with pi-phase encoding");
+    const BigInt L=BigInt{field.order/4U};
+    const BigInt scaled_num=phase.value.numerator()*L;
+    const BigInt den=phase.value.denominator();
+    if (scaled_num%den!=0)
+        throw std::runtime_error("phase is not representable in the active cyclotomic field");
+
+    BigInt exp_big=BigInt{2}*(scaled_num/den);
+    exp_big%=field.order;
+    if (exp_big<0) exp_big+=field.order;
+    const unsigned exp=exp_big.convert_to<unsigned>();
+    const unsigned negexp=(field.order-exp)%field.order;
+
+    const Alg z=field.monomial(exp);
+    const Alg zbar=field.monomial(negexp);
+    const Rational half(BigInt{1},BigInt{2});
+    const Alg imag_unit=field.monomial(field.order/4U);
+    const Alg cosine=field.scale(field.add(z,zbar),half);
+    const Alg sine=field.scale(
+        field.mul(field.sub(z,zbar),field.neg(imag_unit)),
+        half);
+
+    if (!field.is_real(cosine) || !field.is_real(sine))
+        throw std::runtime_error("exact unit direction is not real");
+    return {cosine,sine};
+}
+
 } // namespace
 
 NetworkCycleBasis build_network_cycle_basis(const NetworkClosureInput& input) {
@@ -1065,6 +1095,147 @@ NetworkClosureResult verify_network_closure_certificate(const NetworkClosureCert
         return invalid_certificate(cert);
     } catch (...) {
         return invalid_certificate(cert);
+    }
+}
+
+
+CertifiedScalar certified_algebraic_real(
+    unsigned cyclotomic_order,
+    const AlgebraicChordValue& value) {
+    if (cyclotomic_order==0)
+        throw std::invalid_argument("cyclotomic order must be positive");
+    CyclotomicField field(cyclotomic_order);
+    if (value.coefficients.size()!=field.degree)
+        throw std::invalid_argument("algebraic coefficient count does not match cyclotomic degree");
+
+    Alg a{value.coefficients};
+    if (!field.is_real(a))
+        throw std::invalid_argument("algebraic value is not exactly real");
+
+    detail::Interval acc(0.0);
+    for (std::size_t j=0;j<field.degree;++j) {
+        if (a.c[j]==Rational(BigInt{0})) continue;
+        const PiRational phase{BigInt{2}*BigInt{j},BigInt{cyclotomic_order}};
+        acc += rational_interval_local(a.c[j]) * certified_cos_pi(phase).interval();
+    }
+    return CertifiedScalar(acc);
+}
+
+ProjectivelyRigidEmbeddingResult reconstruct_projectively_rigid_embedding(
+    const NetworkClosureCertificate& cert) {
+    ProjectivelyRigidEmbeddingResult out;
+
+    try {
+        const auto verified=verify_network_closure_certificate(cert);
+        if (verified.termination==TerminationReason::BackendFailure) {
+            out.status=ProjectivelyRigidEmbeddingStatus::InvalidCertificate;
+            return out;
+        }
+        if (verified.status==NetworkClosureStatus::Indeterminate) {
+            out.status=ProjectivelyRigidEmbeddingStatus::Indeterminate;
+            return out;
+        }
+        if (verified.status!=NetworkClosureStatus::Closed) {
+            out.status=ProjectivelyRigidEmbeddingStatus::NotClosed;
+            return out;
+        }
+
+        const std::size_t m=cert.input.turns.size();
+        if (cert.exact_rank>=m || m-cert.exact_rank!=1) {
+            out.status=ProjectivelyRigidEmbeddingStatus::NotProjectivelyRigid;
+            return out;
+        }
+
+        auto sys=build_exact_system(cert.input);
+        if (!sys.supported || sys.order!=cert.cyclotomic_order) {
+            out.status=ProjectivelyRigidEmbeddingStatus::Indeterminate;
+            return out;
+        }
+
+        auto c=decode_vector(sys.field,cert.positive_kernel);
+        Alg total=sys.field.zero();
+        for (const auto& x : c) total=sys.field.add(total,x);
+        if (sys.field.is_zero(total)) {
+            out.status=ProjectivelyRigidEmbeddingStatus::InvalidCertificate;
+            return out;
+        }
+        for (auto& x : c) x=sys.field.divide(x,total);
+
+        std::vector<Alg> px(cert.input.vertex_count,sys.field.zero());
+        std::vector<Alg> py(cert.input.vertex_count,sys.field.zero());
+        std::vector<bool> assigned(cert.input.vertex_count,false);
+
+        Alg curx=sys.field.zero();
+        Alg cury=sys.field.zero();
+        const std::size_t root=cert.input.trace_vertices.front();
+        assigned[root]=true;
+
+        for (std::size_t e=0;e<m;++e) {
+            const std::size_t tail=cert.input.trace_vertices[e];
+            const std::size_t head=cert.input.trace_vertices[(e+1)%m];
+
+            if (!assigned[tail]) {
+                px[tail]=curx;
+                py[tail]=cury;
+                assigned[tail]=true;
+            } else if (!sys.field.equal(px[tail],curx) ||
+                       !sys.field.equal(py[tail],cury)) {
+                out.status=ProjectivelyRigidEmbeddingStatus::InvalidCertificate;
+                return out;
+            }
+
+            const auto [ux,uy]=exact_unit_direction(
+                sys.field,sys.topology.chord_phase_pi[e]);
+            const Alg nextx=sys.field.add(curx,sys.field.mul(c[e],ux));
+            const Alg nexty=sys.field.add(cury,sys.field.mul(c[e],uy));
+
+            if (!assigned[head]) {
+                px[head]=nextx;
+                py[head]=nexty;
+                assigned[head]=true;
+            } else if (!sys.field.equal(px[head],nextx) ||
+                       !sys.field.equal(py[head],nexty)) {
+                out.status=ProjectivelyRigidEmbeddingStatus::InvalidCertificate;
+                return out;
+            }
+
+            curx=nextx;
+            cury=nexty;
+        }
+
+        if (!sys.field.equal(curx,px[root]) ||
+            !sys.field.equal(cury,py[root])) {
+            out.status=ProjectivelyRigidEmbeddingStatus::InvalidCertificate;
+            return out;
+        }
+
+        for (bool x : assigned) {
+            if (!x) {
+                out.status=ProjectivelyRigidEmbeddingStatus::InvalidCertificate;
+                return out;
+            }
+        }
+
+        out.embedding.cyclotomic_order=sys.order;
+        out.embedding.vertices.reserve(cert.input.vertex_count);
+        for (std::size_t v=0;v<cert.input.vertex_count;++v)
+            out.embedding.vertices.push_back(
+                AlgebraicPoint2{AlgebraicChordValue{px[v].c},
+                                AlgebraicChordValue{py[v].c}});
+
+        out.embedding.chord_magnitudes=encode_vector(c);
+        out.embedding.tangent_phase_pi.reserve(m);
+        PiRational phase{0,1};
+        for (std::size_t e=0;e<m;++e) {
+            out.embedding.tangent_phase_pi.push_back(phase);
+            phase=phase+cert.input.turns[e].pi;
+        }
+
+        out.status=ProjectivelyRigidEmbeddingStatus::Ready;
+        return out;
+    } catch (...) {
+        out.status=ProjectivelyRigidEmbeddingStatus::InvalidCertificate;
+        return out;
     }
 }
 
