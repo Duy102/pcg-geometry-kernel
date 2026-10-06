@@ -25,10 +25,9 @@ enum class NetworkClosureStatus {
 };
 
 enum class NetworkClosureProof {
-    CertifiedPositiveRigidKernel,
+    CertifiedPositiveKernel,
     ExactFullRankObstruction,
-    CertifiedRigidSignObstruction,
-    HigherDimensionalKernel,
+    CertifiedStiemkeObstruction,
     CyclotomicOrderLimit,
     SignCertificationLimit,
     BackendFailure,
@@ -45,7 +44,7 @@ struct NetworkClosureCertificate {
     explicit NetworkClosureCertificate(const NetworkClosureInput& in) : input(in) {}
 
     std::string schema{"pcg-network-closure-certificate"};
-    std::string schema_version{"1.0"};
+    std::string schema_version{"1.1"};
     std::string theorem_id{"PCG-NETWORK-CLOSURE-THM-001"};
     SourceDigest source_digest{
         "SHA-256",
@@ -59,7 +58,12 @@ struct NetworkClosureCertificate {
 
     unsigned cyclotomic_order{};
     std::size_t exact_rank{};
-    std::vector<AlgebraicChordValue> rigid_kernel;
+
+    // CLOSED certificate: c > 0 and N c = 0.
+    std::vector<AlgebraicChordValue> positive_kernel;
+
+    // NOT_CLOSED Stiemke certificate: N^T y >= 0 and N^T y != 0.
+    std::vector<AlgebraicChordValue> stiemke_dual;
 };
 
 struct NetworkClosureResult {
