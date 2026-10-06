@@ -6,10 +6,15 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         compiler: [gcc, clang]
     steps:
       - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-dev
       - name: Configure GCC
         if: matrix.compiler == 'gcc'
         run: cmake -S . -B build -DCMAKE_CXX_COMPILER=g++
