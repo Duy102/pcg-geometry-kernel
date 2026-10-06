@@ -49,6 +49,8 @@ int main() {
           "upper-half-plane triangle has no positive network closure");
     check(o.proof==NetworkClosureProof::CertifiedRigidSignObstruction,
           "nonclosed triangle has certified rigid sign obstruction");
+    check(o.assurance==ArithmeticAssurance::CertifiedNumerical,
+          "rigid sign obstruction uses exact algebra plus certified sign separation");
     check(verify_network_closure_certificate(o.certificate).status==NetworkClosureStatus::NotClosed,
           "nonclosed triangle certificate verifies");
 
@@ -62,6 +64,8 @@ int main() {
           "single nonzero loop chord cannot close");
     check(l.proof==NetworkClosureProof::ExactFullRankObstruction,
           "single loop is rejected by exact full rank");
+    check(l.assurance==ArithmeticAssurance::Exact,
+          "full-rank obstruction is exact without sign numerics");
 
     // Production ABCABC rational witness already used by the fixed-turn solver.
     NetworkClosureInput abcabc{
