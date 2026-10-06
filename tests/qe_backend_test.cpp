@@ -41,9 +41,9 @@ int main() {
     NetworkClosureInput triangle{
         3,{0,1,2},
         {
-            Turn{PiRational{1,2}},
-            Turn{PiRational{1,1}},
-            Turn{PiRational{3,2}}
+            Turn{PiRational{2,3}},
+            Turn{PiRational{1,3}},
+            Turn{PiRational{1,1}}
         }
     };
 
