@@ -2,45 +2,96 @@
 
 Theorem-traceable production engineering for Prime-Curve Geometry (PCG).
 
-## Current scope
+## Current status
 
-This repository is intentionally narrow. The current implementation target is the six-arc `ABCABC` fixed-turn vertical slice from Prompt v5. It does **not** claim a complete arbitrary-trace PCG solver.
+The repository currently contains a **hardened certified ABCABC production-candidate vertical slice** merged into `main`.
 
-The Phase 0 audit checkpoint remains preserved in `PCG_Geometry_Kernel_Phase0_Audit.zip`.
+It is intentionally narrow: this is **not** a claim that arbitrary-trace PCG or the full PCG framework is production-complete.
 
-## Phase 0–3 candidate implementation
+The historical Phase 0 audit checkpoint remains preserved in `PCG_Geometry_Kernel_Phase0_Audit.zip`.
 
-The `phase0-3-abcabc` branch adds:
+## Implemented ABCABC vertical slice
 
-- C++20/CMake kernel skeleton;
-- exact rational multiples of pi for theorem-facing turns;
-- separate `InputError`, `DomainError`, `Decision`, `ProofKind`, `ArithmeticAssurance`, and `TerminationReason` semantics;
-- Boost interval-based certification substrate with analytic transcendental checks;
+The current `main` branch includes:
+
+- C++20/CMake kernel;
+- arbitrary-precision exact rational multiples of pi for theorem-facing turns;
+- explicit `InputError`, `DomainError`, `Decision`, `ProofKind`, `ArithmeticAssurance`, and `TerminationReason` semantics;
+- Boost interval-based certification substrate;
 - generic supporting-circle / finite-arc relation code and PCG `ExtraHit`;
-- specialized `ABCABC` theorem solver;
-- exact phase / positive-closure obstruction path;
+- specialized fixed-turn `ABCABC` theorem solver;
+- exact paired phase and positive-chord-closure obstruction paths;
 - certified numerical cross-passage checks;
-- deterministic canonical input serialization + SHA-256 binding;
-- versioned certificate metadata and independent certificate re-verification;
-- versioned `ABCABC` golden conformance corpus;
-- GCC/Clang GitHub Actions CI.
+- explicit theorem genericity/domain gate for required support-circle distinctness, prescribed transversality, and antipodal branch separation;
+- deterministic canonical input serialization and SHA-256 certificate binding;
+- theorem/source provenance metadata;
+- certificate verifier in a separate translation unit from the solver's private evaluator;
+- tamper checks for theorem identity, source digest, input digest, proof reason, proof kind, and arithmetic assurance;
+- versioned fixed-turn golden conformance corpus;
+- exhaustive `ABCABC` sign-rotation conformance suite.
 
-Local clean builds were verified with GCC and Clang before publication of the candidate branch. Remote GitHub CI remains the release gate for merging.
+## Exhaustive classification coverage
 
-## Scientific boundary
-
-The stable design invariants are:
+The sign-rotation theorem suite covers all:
 
 ```text
-REALIZABLE     => verifiable existence evidence
-NOT_REALIZABLE => verifiable obstruction
-otherwise      => INDETERMINATE
+64 sign patterns x 3 rotations {-2, 0, 2} = 192 classes
 ```
 
-No numerical search failure is treated as proof of nonexistence. Intermediate stages must not overstate their guarantees.
+The expected realizable counts are:
 
-## Historical Phase 0 audit
+- `r = -2`: 15;
+- `r = 0`: 6;
+- `r = 2`: 15;
+- total: 36.
 
-The original audit package is retained as a historical checkpoint. Its blocker statements describe the earlier environment and should not be read as the status of later implementation work.
+The theorem's rational orbit witnesses are expanded by cyclic shift and global sign reflection so that all 36 realizable sign-rotation classes are exercised through the fixed-turn solver and certificate verifier.
 
-Public visibility does not itself grant a software or manuscript license. No license has been added yet.
+## Scientific decision contract
+
+```text
+REALIZABLE     => theorem-domain assumptions certified + verifiable existence evidence
+NOT_REALIZABLE => verifiable theorem obstruction
+UNSUPPORTED    => certified violation of a required theorem-domain assumption
+INDETERMINATE  => certification cannot separate a required numerical/geometric boundary
+```
+
+No numerical search failure is treated as proof of nonexistence.
+
+## CI / Trusted Computing Base gates
+
+The current CI baseline uses:
+
+- Ubuntu 24.04;
+- Boost 1.83 package `libboost1.83-dev=1.83.0-2.1ubuntu3.2`;
+- GCC 13 and Clang 18;
+- a pinned immutable `actions/checkout` commit.
+
+Every push / pull request runs:
+
+- `linux-gcc-Debug`;
+- `linux-gcc-Release`;
+- `linux-clang-Debug`;
+- `linux-clang-Release`;
+- `linux-gcc-asan-ubsan` (AddressSanitizer + UndefinedBehaviorSanitizer).
+
+The hardened ABCABC merge and the post-merge `main` run passed all five gates.
+
+This improves reproducibility but is not a fully hermetic build: the GitHub Ubuntu image and package repository can still evolve.
+
+## Deliberate remaining scope boundaries
+
+The current repository does not yet provide:
+
+- a general arbitrary-Gauss-word solver;
+- the full general Seifert / Network Closure stack;
+- production `ABCADCBD`;
+- general remote-Hit / global BVH or spatial-index infrastructure;
+- language bindings;
+- a stable public v1 API.
+
+These belong to later PCG phases rather than the present ABCABC vertical slice.
+
+## Licensing
+
+Public visibility does not itself grant a software or manuscript license. No license has been added yet; licensing remains an explicit project decision.
