@@ -9,6 +9,7 @@ add_library(pcg STATIC
     src/geometry.cpp
     src/abcabc.cpp
     src/abcabc_verify.cpp
+    src/seifert_flow.cpp
 )
 target_include_directories(pcg PUBLIC include)
 target_link_libraries(pcg PUBLIC OpenSSL::Crypto)
@@ -24,3 +25,7 @@ add_test(NAME pcg_golden_tests COMMAND pcg_golden_tests ${CMAKE_SOURCE_DIR}/corp
 add_executable(pcg_sign_rotation_tests tests/sign_rotation_test.cpp)
 target_link_libraries(pcg_sign_rotation_tests PRIVATE pcg)
 add_test(NAME pcg_sign_rotation_tests COMMAND pcg_sign_rotation_tests ${CMAKE_SOURCE_DIR}/corpus/abcabc-sign-rotation-v1.csv)
+
+add_executable(pcg_seifert_flow_tests tests/seifert_flow_test.cpp)
+target_link_libraries(pcg_seifert_flow_tests PRIVATE pcg)
+add_test(NAME pcg_seifert_flow_tests COMMAND pcg_seifert_flow_tests)

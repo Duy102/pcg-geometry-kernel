@@ -9,4 +9,6 @@ Stable IDs used by the initial vertical slice:
 | `PCG-ABCABC-LEM-CIRCLE2-001` | same source, Second supporting-circle intersection | local second-intersection construction |
 | `PCG-ABCABC-THM-SR-001` | `PCG_ABCABC_Complete_Sign_Rotation_Classification_v0.4.tex`, Complete six-arc ABCABC sign--rotation classification | exact 192-class sign/rotation existence classifier |
 
-Source SHA-256 digests are generated into `docs/source-digests.txt` during Phase 0 and are certificate provenance inputs.
+| `PCG-SEIFERT-TURN-FLOW-THM-001` | `PCG_Seifert_Turn_Flow_v0.2.tex`, Seifert-flow max-flow/min-cut theorem | exact relaxed Seifert turn-flow feasibility with constructive flow or cut certificate |
+
+Source SHA-256 digests are recorded in `docs/source-digests.txt` and are certificate provenance inputs.

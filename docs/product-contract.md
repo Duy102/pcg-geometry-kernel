@@ -28,3 +28,15 @@ After phase and positive-chord feasibility, the specialized solver explicitly ce
 ## Certificate integrity
 
 Verification does not trust certificate claim fields. The verifier recomputes the supported ABCABC theorem path independently from the solver's private evaluator and requires the stored reason, proof kind, arithmetic assurance, theorem identity, source digest, and canonical input digest to agree with recomputation. Shared low-level geometry and certified numerical primitives remain part of the common TCB.
+
+## Relaxed Seifert turn-flow layer
+
+The Phase 4 Seifert module is an intermediate certified feasibility layer, not a top-level geometric realizability solver.
+
+For a finite Seifert multigraph with fixed circle orientations and valid positive/negative source-piece capacities, it returns:
+
+- an exact interior turn-flow witness when the relaxed system is feasible;
+- an exact nonempty Seifert cut obstruction when the relaxed system is infeasible;
+- INDETERMINATE only for backend or certificate-integrity failure.
+
+The module must never map relaxed flow feasibility directly to top-level REALIZABLE. Individual arc-turn allocation, metric closure, prescribed crossing geometry, and unintended-intersection exclusion remain later layers.

@@ -58,6 +58,16 @@ INDETERMINATE  => certification cannot separate a required numerical/geometric b
 
 No numerical search failure is treated as proof of nonexistence.
 
+## Phase 4 Seifert turn-flow layer
+
+The production-candidate stack now also contains an exact relaxed Seifert turn-flow module based on PCG Seifert Turn-Flow Theory v0.2.
+
+It uses arbitrary-precision integer max-flow after an exact lower-bound circulation reduction. FEASIBLE certificates contain exact interior flow/turn witnesses; INFEASIBLE certificates contain exact violated nonempty Seifert cuts. The verifier checks these witnesses algebraically without rerunning max-flow.
+
+The module is intentionally intermediate: Seifert-flow feasibility does not imply full geometric realizability.
+
+Its validation includes a deterministic 6000-case cross-check against a separate exhaustive exact-cut oracle.
+
 ## CI / Trusted Computing Base gates
 
 The current CI baseline uses:
@@ -84,7 +94,7 @@ This improves reproducibility but is not a fully hermetic build: the GitHub Ubun
 The current repository does not yet provide:
 
 - a general arbitrary-Gauss-word solver;
-- the full general Seifert / Network Closure stack;
+- the general Network Closure metric layer;
 - production `ABCADCBD`;
 - general remote-Hit / global BVH or spatial-index infrastructure;
 - language bindings;
