@@ -12,3 +12,7 @@ For Phase 0–3 certified results, the verifier relies on:
 - core finite-arc relation implementation used by the verifier.
 
 Differential tests validate logic above this shared numerical substrate; they do not independently prove the TCB itself. Analytic known-value tests are therefore required for the TCB.
+
+## Certificate verifier separation
+
+The production ABCABC certificate verifier is compiled from a separate translation unit and does not call the solver's private `evaluate()` path. It independently recomputes phase congruences, positive closure, and the six cross-passage decisions, and it rejects tampering of the stored proof reason, proof kind, or arithmetic assurance. The verifier deliberately still shares the documented exact-arithmetic, interval, transcendental, and shared-start geometry TCB; this is implementation-path separation, not a claim of a fully independent numerical backend.

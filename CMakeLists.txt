@@ -8,6 +8,7 @@ add_library(pcg STATIC
     src/core.cpp
     src/geometry.cpp
     src/abcabc.cpp
+    src/abcabc_verify.cpp
 )
 target_include_directories(pcg PUBLIC include)
 target_link_libraries(pcg PUBLIC OpenSSL::Crypto)

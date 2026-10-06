@@ -24,3 +24,7 @@ Intermediate modules never emit top-level realizability decisions.
 ## ABCABC theorem-domain gate
 
 After phase and positive-chord feasibility, the specialized solver explicitly certifies the v0.3 genericity assumptions before any top-level REALIZABLE claim. The gate checks required support-circle distinctness across the fifteen arc pairs, cross-passage transversality at prescribed double points, and separation from the antipodal principal-argument branch cut. Certified violations return UNSUPPORTED; unresolved interval separation returns INDETERMINATE.
+
+## Certificate integrity
+
+Verification does not trust certificate claim fields. The verifier recomputes the supported ABCABC theorem path independently from the solver's private evaluator and requires the stored reason, proof kind, arithmetic assurance, theorem identity, source digest, and canonical input digest to agree with recomputation. Shared low-level geometry and certified numerical primitives remain part of the common TCB.

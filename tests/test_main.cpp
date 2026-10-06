@@ -88,6 +88,27 @@ int main() {
           wrong_source_verified.termination == pcg::TerminationReason::BackendFailure,
           "certificate verifier rejects tampered theorem source digest");
 
+    auto wrong_reason = solved.certificate;
+    wrong_reason.reason = pcg::ABCABCProofReason::ExtraHitObstruction;
+    auto wrong_reason_verified = pcg::verify_abcabc_certificate(wrong_reason);
+    check(wrong_reason_verified.decision == pcg::Decision::Indeterminate &&
+          wrong_reason_verified.termination == pcg::TerminationReason::BackendFailure,
+          "certificate verifier rejects tampered proof reason");
+
+    auto wrong_kind = solved.certificate;
+    wrong_kind.proof_kind = pcg::ProofKind::TheoremInstantiation;
+    auto wrong_kind_verified = pcg::verify_abcabc_certificate(wrong_kind);
+    check(wrong_kind_verified.decision == pcg::Decision::Indeterminate &&
+          wrong_kind_verified.termination == pcg::TerminationReason::BackendFailure,
+          "certificate verifier rejects tampered proof kind");
+
+    auto wrong_assurance = solved.certificate;
+    wrong_assurance.assurance = pcg::ArithmeticAssurance::Exact;
+    auto wrong_assurance_verified = pcg::verify_abcabc_certificate(wrong_assurance);
+    check(wrong_assurance_verified.decision == pcg::Decision::Indeterminate &&
+          wrong_assurance_verified.termination == pcg::TerminationReason::BackendFailure,
+          "certificate verifier rejects tampered arithmetic assurance");
+
     // Symmetric all-2pi/3 input is numerically/geometrically degenerate for the
     // current certified cross-passage path and must not be overclaimed.
     pcg::ABCABCInput symmetric{{
