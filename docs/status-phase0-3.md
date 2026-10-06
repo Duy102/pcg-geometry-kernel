@@ -18,4 +18,4 @@ Publication note: the reviewed Phase 0–3 source archive was reconstructed on G
 
 Current deliberate limitation: theorem-facing input uses exact rational multiples of pi. This avoids false exact-modulo claims for decimal-radian approximations. Broader real-input encodings are future work.
 
-Remote GCC/Clang CI is the merge gate for this branch.
+Remote GCC/Clang CI is the merge gate for this branch. CI installs the required Boost headers explicitly on the Ubuntu runner.
