@@ -44,7 +44,7 @@ int main() {
     SharedStartArc tangent_a{
         PiRational{0,1},Turn{PiRational{1,3}},PositiveInterval::point(1.0)};
     SharedStartArc tangent_b{
-        PiRational{1,1},Turn{PiRational{-1,3}},PositiveInterval::point(1.0)};
+        PiRational{1,1},Turn{PiRational{-1,2}},PositiveInterval::point(1.0)};
     check(sin_pi_sign(tangent_b.tangent_phase_pi-tangent_a.tangent_phase_pi)==0,
           "tangent-safe regression uses one exact tangent line");
     check(shared_start_support_relation(tangent_a,tangent_b)==SupportRelation::Distinct,
