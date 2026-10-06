@@ -1,6 +1,7 @@
 #pragma once
 
 #include <boost/numeric/interval.hpp>
+#include <boost/multiprecision/cpp_int.hpp>
 #include <boost/rational.hpp>
 #include <array>
 #include <cstdint>
@@ -9,11 +10,14 @@
 
 namespace pcg {
 
-using Rational = boost::rational<std::int64_t>;
+using BigInt = boost::multiprecision::cpp_int;
+using Rational = boost::rational<BigInt>;
 
 struct PiRational {
     Rational value;
     PiRational(std::int64_t n = 0, std::int64_t d = 1);
+    PiRational(BigInt n, BigInt d);
+    explicit PiRational(Rational r);
 };
 
 PiRational operator+(PiRational a, PiRational b);

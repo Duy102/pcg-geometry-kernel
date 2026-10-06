@@ -26,6 +26,16 @@ int main() {
     check(pcg::sin_pi_sign(PiRational{1, 3}) == 1, "sin(pi/3) exact sign positive");
     check(pcg::sin_pi_sign(PiRational{4, 3}) == -1, "sin(4pi/3) exact sign negative");
     check(pcg::sin_pi_sign(PiRational{2, 1}) == 0, "sin(2pi) exact zero");
+
+    // Exact arithmetic must remain exact beyond signed 64-bit range.
+    pcg::BigInt huge = 1;
+    huge <<= 100;
+    const PiRational huge_a{pcg::Rational{huge + 1, huge}};
+    const PiRational huge_b{pcg::Rational{huge - 1, huge}};
+    const auto huge_delta = huge_a - huge_b;
+    check(huge_delta.value == pcg::Rational{pcg::BigInt{2}, huge},
+          "arbitrary-precision rational avoids int64 overflow");
+
     check_domain_error([] { return pcg::Turn{PiRational{0,1}}; }, pcg::DomainError::ZeroTurnOutsideTheoremDomain, "zero turn rejected");
     check_domain_error([] { return pcg::Turn{PiRational{2,1}}; }, pcg::DomainError::FullOrOverTurnOutsideTheoremDomain, "full turn rejected");
 
@@ -48,7 +58,7 @@ int main() {
         pcg::Turn{PiRational{1,1}}, pcg::Turn{PiRational{1,3}}, pcg::Turn{PiRational{1,1}}
     }};
     auto solved = pcg::solve_abcabc(good);
-    check(solved.decision == pcg::Decision::Realizable, "ABCABC equal 2pi/3 is realizable");
+    check(solved.decision == pcg::Decision::Realizable, "ABCABC r=2 theorem witness is realizable");
     check(solved.assurance == pcg::ArithmeticAssurance::CertifiedNumerical || solved.assurance == pcg::ArithmeticAssurance::Exact,
           "REALIZABLE has certified assurance");
     auto verified = pcg::verify_abcabc_certificate(solved.certificate);

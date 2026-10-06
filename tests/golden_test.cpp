@@ -10,7 +10,7 @@ using namespace pcg;
 static PiRational parse_rational(const std::string& s) {
     auto slash=s.find('/');
     if (slash==std::string::npos) throw std::runtime_error("bad rational");
-    return PiRational{std::stoll(s.substr(0,slash)),std::stoll(s.substr(slash+1))};
+    return PiRational{BigInt{s.substr(0,slash)}, BigInt{s.substr(slash+1)}};
 }
 static Decision parse_decision(const std::string& s) {
     if(s=="REALIZABLE") return Decision::Realizable;

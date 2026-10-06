@@ -1,11 +1,13 @@
 #include <pcg/core.hpp>
 #include <boost/numeric/interval/transc.hpp>
 #include <boost/numeric/interval/utility.hpp>
+#include <boost/multiprecision/cpp_dec_float.hpp>
 #include <cmath>
 #include <limits>
 #include <openssl/sha.h>
 #include <iomanip>
 #include <sstream>
+#include <utility>
 
 namespace pcg {
 namespace {
@@ -17,39 +19,50 @@ I pi_interval() {
 }
 
 I rational_interval(const Rational& q) {
-    const long double exactish = static_cast<long double>(q.numerator()) / static_cast<long double>(q.denominator());
-    const double d = static_cast<double>(exactish);
+    // Convert an arbitrary-precision exact rational through a high-precision
+    // decimal approximation, then widen by one binary64 ulp on each side.
+    // The exact rational remains the theorem-facing representation; this
+    // conversion is used only to seed the certified interval substrate.
+    using Dec100 = boost::multiprecision::number<boost::multiprecision::cpp_dec_float<100>>;
+    const Dec100 approx = Dec100(q.numerator()) / Dec100(q.denominator());
+    const double d = approx.convert_to<double>();
     return I(std::nextafter(d, -std::numeric_limits<double>::infinity()),
              std::nextafter(d,  std::numeric_limits<double>::infinity()));
 }
 
-std::int64_t floor_rational(const Rational& r) {
-    auto n = r.numerator();
-    auto d = r.denominator();
-    auto q = n / d;
-    auto rem = n % d;
+BigInt floor_rational(const Rational& r) {
+    const BigInt& n = r.numerator();
+    const BigInt& d = r.denominator();
+    BigInt q = n / d;
+    const BigInt rem = n % d;
     if (rem != 0 && n < 0) --q;
     return q;
 }
 }
 
-PiRational::PiRational(std::int64_t n, std::int64_t d) : value(n,d) {
-    if (d == 0) throw std::invalid_argument("zero denominator");
-}
-PiRational operator+(PiRational a, PiRational b) { return PiRational{(a.value+b.value).numerator(), (a.value+b.value).denominator()}; }
-PiRational operator-(PiRational a, PiRational b) { auto r=a.value-b.value; return PiRational{r.numerator(),r.denominator()}; }
-PiRational operator-(PiRational a) { return PiRational{-a.value.numerator(),a.value.denominator()}; }
-PiRational operator*(PiRational a, Rational b) { auto r=a.value*b; return PiRational{r.numerator(),r.denominator()}; }
-PiRational operator/(PiRational a, std::int64_t d) { auto r=a.value/Rational(d); return PiRational{r.numerator(),r.denominator()}; }
+PiRational::PiRational(std::int64_t n, std::int64_t d)
+    : PiRational(BigInt{n}, BigInt{d}) {}
+
+PiRational::PiRational(BigInt n, BigInt d)
+    : value(std::move(n), std::move(d)) {}
+
+PiRational::PiRational(Rational r)
+    : value(std::move(r)) {}
+
+PiRational operator+(PiRational a, PiRational b) { return PiRational{a.value+b.value}; }
+PiRational operator-(PiRational a, PiRational b) { return PiRational{a.value-b.value}; }
+PiRational operator-(PiRational a) { return PiRational{-a.value}; }
+PiRational operator*(PiRational a, Rational b) { return PiRational{a.value*b}; }
+PiRational operator/(PiRational a, std::int64_t d) { return PiRational{a.value/Rational(BigInt{d})}; }
 bool operator==(PiRational a, PiRational b) { return a.value==b.value; }
 
 int sin_pi_sign(PiRational x) {
     // Reduce q modulo 2 into [0,2), exactly.
-    Rational two(2);
+    Rational two(BigInt{2});
     const auto k = floor_rational(x.value / two);
-    Rational r = x.value - Rational(2*k);
-    if (r == Rational(0) || r == Rational(1)) return 0;
-    return r < Rational(1) ? 1 : -1;
+    Rational r = x.value - Rational(BigInt{2}*k);
+    if (r == Rational(BigInt{0}) || r == Rational(BigInt{1})) return 0;
+    return r < Rational(BigInt{1}) ? 1 : -1;
 }
 
 bool is_even_integer(PiRational x) {
@@ -94,7 +107,9 @@ CertifiedScalar certified_abs(const CertifiedScalar& x) {
 }
 
 std::string rational_string(const PiRational& q) {
-    return std::to_string(q.value.numerator()) + "/" + std::to_string(q.value.denominator());
+    std::ostringstream os;
+    os << q.value.numerator() << "/" << q.value.denominator();
+    return os.str();
 }
 
 std::string sha256_hex(const std::string& input) {
