@@ -116,7 +116,6 @@ NetworkCycleBasis cycle_basis_impl(const NetworkClosureInput& input) {
 
         if (e.tail != e.head) {
             std::vector<std::size_t> parent_v(n,n);
-            std::vector<std::size_t> parent_e(n,m);
             std::queue<std::size_t> q;
             parent_v[e.head]=e.head;
             q.push(e.head);
@@ -125,7 +124,6 @@ NetworkCycleBasis cycle_basis_impl(const NetworkClosureInput& input) {
                 for (const auto& [w,te] : tree[v]) {
                     if (parent_v[w]!=n) continue;
                     parent_v[w]=v;
-                    parent_e[w]=te;
                     q.push(w);
                 }
             }
@@ -138,7 +136,6 @@ NetworkCycleBasis cycle_basis_impl(const NetworkClosureInput& input) {
             std::vector<std::pair<std::size_t,std::size_t>> steps;
             while (cur != e.head) {
                 const std::size_t pv=parent_v[cur];
-                const std::size_t te=parent_e[cur];
                 steps.push_back({pv,cur});
                 cur=pv;
             }
